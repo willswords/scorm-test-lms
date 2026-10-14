@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SCORM Test LMS</title>
+<style>
+:root{
+  --bg:#f3f4f7;--surface:#ffffff;--surface2:#eceef3;--border:#d5d9e2;
+  --text:#1b2030;--muted:#5d6577;--accent:#1d5fd1;--accent-text:#ffffff;
+  --ok:#137a43;--warn:#9a5b00;--warn-bg:#fff4e0;--err:#b42318;--err-bg:#fdecea;
+  --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
+  --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#14161c;--surface:#1c1f27;--surface2:#252935;--border:#343a4a;
+    --text:#e6e8ef;--muted:#9aa2b5;--accent:#5b8ff0;--accent-text:#0d1220;
+    --ok:#5cc98a;--warn:#f0b04f;--warn-bg:#33270f;--err:#f27a6e;--err-bg:#3a1714;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.45 var(--sans);display:flex;flex-direction:column;overflow:hidden}
+button,select{font:inherit;color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.brand small{font-weight:400;color:var(--muted);margin-left:6px}
+.pkg{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+#pkgName{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.chk{display:flex;align-items:center;gap:5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+label.inline{display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+
+.banner{padding:8px 14px;background:var(--warn-bg);color:var(--warn);border-bottom:1px solid var(--border)}
+.banner.err{background:var(--err-bg);color:var(--err)}
+
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
+.stage{position:relative;background:var(--surface);border-right:1px solid var(--border);min-height:0}
+.stage iframe{width:100%;height:100%;border:0;display:block;background:#fff}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);font-size:15px}
+
+.panel{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.panel h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.panel h2 .grow{flex:1}
+.panel h2 button,.panel h2 label{text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;padding:2px 8px}
+.rec{width:100%;border-collapse:collapse;font-size:12px}
+.rec th{text-align:left;font-weight:400;color:var(--muted);padding:2px 10px 2px 0;white-space:nowrap;vertical-align:top;width:1%}
+.rec td{font-family:var(--mono);word-break:break-all;padding:2px 0}
+.rec tr.group th{padding-top:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.rec details summary{cursor:pointer;color:var(--muted);font-family:var(--sans)}
+.rec details pre{margin:4px 0 0;white-space:pre-wrap;max-height:120px;overflow:auto;background:var(--surface2);padding:6px;border-radius:4px}
+.v-ok{color:var(--ok)}
+.v-muted{color:var(--muted)}
+
+#issuesSec{max-height:28%;overflow:auto}
+#issues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+#issues li{padding:5px 8px;border-radius:5px;background:var(--warn-bg);color:var(--warn);font-size:12px}
+#issues li.error{background:var(--err-bg);color:var(--err)}
+#issues li .n{float:right;font-family:var(--mono);opacity:.8}
+#issues .none{background:none;color:var(--muted);padding:0}
+.count{font-family:var(--mono);background:var(--surface2);border-radius:9px;padding:0 7px;color:var(--text);letter-spacing:0}
+
+#logSec{flex:1;display:flex;flex-direction:column;min-height:120px;border-bottom:0}
+#log{flex:1;min-height:0;overflow:auto;font:12px/1.5 var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:1px 8px;border-bottom:1px solid var(--surface2)}
+.row .t{color:var(--muted)}
+.row .c{word-break:break-all}
+.row .fn{font-weight:600}
+.row .ret{color:var(--muted)}
+.row.err .c{color:var(--err)}
+.row.note .c{color:var(--accent);font-family:var(--sans)}
+.row.hidden{display:none}
+
+#dropOverlay{position:fixed;inset:0;background:rgba(29,95,209,.15);border:3px dashed var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--accent);z-index:10;pointer-events:none}
+#dropOverlay[hidden]{display:none}
+
+@media (max-width:900px){
+  body{height:auto;min-height:100%;overflow:auto}
+  main{grid-template-columns:1fr;grid-template-rows:70vh auto}
+  .stage{border-right:0;border-bottom:1px solid var(--border)}
+  .panel{overflow:visible}
+  #log{max-height:50vh}
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">SCORM Test LMS<small>SCORM 1.2</small></div>
+  <div class="pkg">
+    <span id="pkgName">No package loaded</span>
+    <select id="scoSel" hidden aria-label="Course item (SCO)"></select>
+  </div>
+  <div class="actions">
+    <button id="btnLaunch" class="primary" disabled>Launch</button>
+    <button id="btnEnd" disabled>End session</button>
+    <span class="sep"></span>
+    <label class="inline">Learner status
+      <select id="statusSel" disabled>
+        <option value="">change…</option>
+        <option value="not attempted">not attempted</option>
+        <option value="incomplete">incomplete</option>
+        <option value="completed">completed</option>
+        <option value="passed">passed</option>
+        <option value="failed">failed</option>
+      </select>
+    </label>
+    <button id="btnReset" disabled>Reset learner</button>
+    <span class="sep"></span>
+    <label class="chk" title="Like many LMSs: if the course exits without cmi.core.exit = &quot;suspend&quot;, the next launch starts a fresh attempt and saved progress is discarded."><input type="checkbox" id="strict"/> Strict resume</label>
+    <button id="btnOpen">Open package…</button>
+    <input type="file" id="fileIn" accept=".zip,application/zip" hidden/>
+  </div>
+</header>
+<div id="banner" class="banner" hidden></div>
+<main>
+  <section class="stage">
+    <iframe id="scoFrame" title="Course"></iframe>
+    <div class="empty" id="empty">Drop a SCORM 1.2 .zip anywhere on this page,<br/>or click “Open package…”.</div>
+  </section>
+  <aside class="panel">
+    <section>
+      <h2>Learner record</h2>
+      <table class="rec" id="recTbl"></table>
+    </section>
+    <section id="issuesSec">
+      <h2>Issues <span class="count" id="issueCount">0</span></h2>
+      <ul id="issues"><li class="none">None so far.</li></ul>
+    </section>
+    <section id="logSec">
+      <h2>LMS calls <span class="grow"></span>
+        <label class="chk"><input type="checkbox" id="hideLookups" checked/> hide error lookups</label>
+        <button id="btnCopy">Copy</button><button id="btnClear">Clear</button>
+      </h2>
+      <div id="log" role="log" aria-label="LMS call log"></div>
+    </section>
+  </aside>
+</main>
+<div id="dropOverlay" hidden>Drop to load this package</div>
+
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════════════════════════
+//  State
+// ════════════════════════════════════════════════════════════════════════════
+let pkg = null;        // { id, name } from the server
+let manifest = null;   // { identifier, title, is2004, scos:[...] }
+let sco = null;        // currently selected SCO
+let saved = null;      // learner record as the LMS has persisted it
+let rec = null;        // working copy for the current session (persisted on commit/finish)
+let session = null;    // per-launch state
+let launchT0 = 0;
+let lastErr = 0;
+const issues = new Map();
+
+const $ = id => document.getElementById(id);
+const frame = $('scoFrame');
+const clone = o => JSON.parse(JSON.stringify(o));
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Learner record persistence (per package + SCO, in this browser)
+// ════════════════════════════════════════════════════════════════════════════
+function newRecord() {
+  return {
+    lesson_status: 'not attempted', lesson_location: '', entry: 'ab-initio',
+    score_raw: '', score_min: '', score_max: '', suspend_data: '', comments: '',
+    total_time: '0000:00:00.00', launches: 0,
+    preference: { audio: '0', language: '', speed: '0', text: '0' },
+    objectives: [], interactions: []
+  };
+}
+const recordKey = () => 'scormlms:' + (manifest.identifier || pkg.name) + '|' + sco.id;
+function loadSaved() {
+  try { const r = JSON.parse(localStorage.getItem(recordKey())); if (r) return Object.assign(newRecord(), r); } catch {}
+  return newRecord();
+}
+function persist() {
+  try { localStorage.setItem(recordKey(), JSON.stringify(saved)); } catch {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Time helpers (CMITimespan: HHHH:MM:SS.SS)
+// ════════════════════════════════════════════════════════════════════════════
+const TIMESPAN = /^(\d{2,4}):(\d{2}):(\d{2})(\.\d{1,2})?$/;
+function toCs(ts) {
+  const m = TIMESPAN.exec(ts); if (!m) return 0;
+  return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 100 + Math.round(parseFloat(m[4] || '0') * 100);
+}
+function fromCs(cs) {
+  const p = (n, w) => String(n).padStart(w, '0');
+  return p(Math.min(9999, Math.floor(cs / 360000)), 4) + ':' + p(Math.floor(cs / 6000) % 60, 2) + ':' + p(Math.floor(cs / 100) % 60, 2) + '.' + p(cs % 100, 2);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Issues + call log
+// ════════════════════════════════════════════════════════════════════════════
+function issue(level, msg) {
+  const cur = issues.get(msg) || { level, n: 0 };
+  cur.n++; issues.set(msg, cur);
+  renderIssues();
+}
+function renderIssues() {
+  const ul = $('issues');
+  ul.innerHTML = '';
+  if (!issues.size) { ul.innerHTML = '<li class="none">None so far.</li>'; $('issueCount').textContent = '0'; return; }
+  for (const [msg, v] of issues) {
+    const li = document.createElement('li');
+    li.className = v.level;
+    li.textContent = msg;
+    if (v.n > 1) { const n = document.createElement('span'); n.className = 'n'; n.textContent = '×' + v.n; li.prepend(n); }
+    ul.appendChild(li);
+  }
+  $('issueCount').textContent = issues.size;
+}
+
+const LOOKUPS = new Set(['LMSGetLastError', 'LMSGetErrorString', 'LMSGetDiagnostic']);
+const MAX_ROWS = 3000;
+function elapsed() {
+  const ms = launchT0 ? Date.now() - launchT0 : 0;
+  return Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0');
+}
+function logRow(cls, html, isLookup) {
+  const log = $('log');
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  const row = document.createElement('div');
+  row.className = 'row ' + cls + (isLookup ? ' lookup' + ($('hideLookups').checked ? ' hidden' : '') : '');
+  row.innerHTML = '<span class="t">' + elapsed() + '</span><span class="c">' + html + '</span>';
+  log.appendChild(row);
+  while (log.childElementCount > MAX_ROWS) log.firstElementChild.remove();
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function short(v) { v = String(v); return v.length > 160 ? v.slice(0, 160) + '… (' + v.length + ' chars)' : v; }
+function logCall(fn, args, ret, code) {
+  const a = args.map(x => '"' + esc(short(x)) + '"').join(', ');
+  let html = '<span class="fn">' + fn + '</span>(' + a + ') <span class="ret">→ "' + esc(short(ret)) + '"</span>';
+  if (code && !LOOKUPS.has(fn)) html += ' — error ' + code + ' ' + esc(ERRORS[code] || '');
+  logRow(code && !LOOKUPS.has(fn) ? 'err' : '', html, LOOKUPS.has(fn));
+}
+const note = text => logRow('note', esc(text), false);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SCORM 1.2 API (window.API)
+// ════════════════════════════════════════════════════════════════════════════
+const ERRORS = {
+  0: 'No error', 101: 'General exception', 201: 'Invalid argument error', 202: 'Element cannot have children',
+  203: 'Element not an array - cannot have count', 301: 'Not initialized', 401: 'Not implemented error',
+  402: 'Invalid set value, element is a keyword', 403: 'Element is read only', 404: 'Element is write only', 405: 'Incorrect data type'
+};
+const STATUS_SET = ['passed', 'completed', 'failed', 'incomplete', 'browsed'];
+const OBJ_STATUS = ['passed', 'completed', 'failed', 'incomplete', 'browsed', 'not attempted'];
+const EXIT_VALUES = ['', 'time-out', 'suspend', 'logout'];
+const isDecimal = v => /^-?\d+(\.\d+)?$/.test(v);
+const isInt = (v, lo, hi) => /^-?\d+$/.test(v) && +v >= lo && +v <= hi;
+const READ_ONLY = new Set(['cmi.core.student_id', 'cmi.core.student_name', 'cmi.core.credit', 'cmi.core.entry', 'cmi.core.total_time',
+  'cmi.core.lesson_mode', 'cmi.launch_data', 'cmi.comments_from_lms', 'cmi.student_data.mastery_score',
+  'cmi.student_data.max_time_allowed', 'cmi.student_data.time_limit_action']);
+
+function sessionOpen(fn) {
+  if (!session) { issue('error', fn + ' was called while no session was open (for example, after the course was closed).'); return false; }
+  if (session.finished) { issue('error', fn + ' was called after LMSFinish. Real LMSs ignore or reject these calls.'); return false; }
+  if (!session.initialized) { issue('error', fn + ' was called before LMSInitialize.'); return false; }
+  return true;
+}
+
+function getValue(el) {
+  const r = rec;
+  const simple = {
+    'cmi.core._children': 'student_id,student_name,lesson_location,credit,lesson_status,entry,score,total_time,lesson_mode,exit,session_time',
+    'cmi.core.student_id': 'learner-001', 'cmi.core.student_name': 'Learner, Test',
+    'cmi.core.lesson_location': r.lesson_location, 'cmi.core.credit': 'credit', 'cmi.core.lesson_status': r.lesson_status,
+    'cmi.core.entry': session.entry, 'cmi.core.score._children': 'raw,min,max',
+    'cmi.core.score.raw': r.score_raw, 'cmi.core.score.min': r.score_min, 'cmi.core.score.max': r.score_max,
+    'cmi.core.total_time': r.total_time, 'cmi.core.lesson_mode': 'normal',
+    'cmi.suspend_data': r.suspend_data, 'cmi.launch_data': sco.launchData, 'cmi.comments': r.comments, 'cmi.comments_from_lms': '',
+    'cmi.student_data._children': 'mastery_score,max_time_allowed,time_limit_action',
+    'cmi.student_data.mastery_score': sco.masteryScore, 'cmi.student_data.max_time_allowed': sco.maxTime,
+    'cmi.student_data.time_limit_action': sco.timeLimitAction,
+    'cmi.student_preference._children': 'audio,language,speed,text',
+    'cmi.student_preference.audio': r.preference.audio, 'cmi.student_preference.language': r.preference.language,
+    'cmi.student_preference.speed': r.preference.speed, 'cmi.student_preference.text': r.preference.text,
+    'cmi.objectives._children': 'id,score,status', 'cmi.objectives._count': String(r.objectives.length),
+    'cmi.interactions._children': 'id,objectives,time,type,correct_responses,weighting,student_response,result,latency',
+    'cmi.interactions._count': String(r.interactions.length)
+  };
+  if (Object.prototype.hasOwnProperty.call(simple, el)) return [simple[el], 0];
+  if (el === 'cmi.core.exit' || el === 'cmi.core.session_time') return ['', 404];
+  let m = /^cmi\.objectives\.(\d+)\.(id|status|score\._children|score\.raw|score\.min|score\.max)$/.exec(el);
+  if (m) {
+    const o = r.objectives[+m[1]]; if (!o) return ['', 201];
+    if (m[2] === 'score._children') return ['raw,min,max', 0];
+    return [o[m[2].replace('score.', 'score_')] ?? '', 0];
+  }
+  m = /^cmi\.interactions\.(\d+)\.(objectives|correct_responses)\._count$/.exec(el);
+  if (m) { const it = r.interactions[+m[1]]; return it ? [String((it[m[2]] || []).length), 0] : ['', 201]; }
+  if (/^cmi\.interactions\.\d+\./.test(el)) return ['', 404];
+  return ['', 401];
+}
+
+function setValue(el, v) {
+  const r = rec;
+  if (/\._(children|count)$/.test(el)) return 402;
+  if (READ_ONLY.has(el)) return 403;
+  switch (el) {
+    case 'cmi.core.lesson_location': if (v.length > 255) return 405; r.lesson_location = v; return 0;
+    case 'cmi.core.lesson_status':
+      if (!STATUS_SET.includes(v)) return 405;
+      r.lesson_status = v; return 0;
+    case 'cmi.core.score.raw': case 'cmi.core.score.min': case 'cmi.core.score.max':
+      if (v !== '' && !isDecimal(v)) return 405;
+      if (v !== '' && (+v < 0 || +v > 100)) issue('warn', el + ' was set to ' + v + '. SCORM 1.2 scores are expected to be 0–100; some LMSs reject other values.');
+      r['score_' + el.split('.').pop()] = v; return 0;
+    case 'cmi.core.exit': if (!EXIT_VALUES.includes(v)) return 405; session.exit = v; return 0;
+    case 'cmi.core.session_time': if (!TIMESPAN.test(v)) return 405; session.sessionTime = v; return 0;
+    case 'cmi.suspend_data': if (v.length > 4096) return 405; r.suspend_data = v; return 0;
+    case 'cmi.comments': if (v.length > 4096) return 405; r.comments = v; return 0;
+    case 'cmi.student_preference.audio': if (!isInt(v, -1, 100)) return 405; r.preference.audio = v; return 0;
+    case 'cmi.student_preference.language': if (v.length > 255) return 405; r.preference.language = v; return 0;
+    case 'cmi.student_preference.speed': if (!isInt(v, -100, 100)) return 405; r.preference.speed = v; return 0;
+    case 'cmi.student_preference.text': if (!isInt(v, -1, 1)) return 405; r.preference.text = v; return 0;
+  }
+  let m = /^cmi\.objectives\.(\d+)\.(id|status|score\.raw|score\.min|score\.max)$/.exec(el);
+  if (m) {
+    const i = +m[1];
+    if (i > r.objectives.length) return 201; // must fill objectives in order
+    const o = r.objectives[i] || (r.objectives[i] = { id: '', status: '', score_raw: '', score_min: '', score_max: '' });
+    if (m[2] === 'status' && !OBJ_STATUS.includes(v)) return 405;
+    if (m[2].startsWith('score.') && v !== '' && !isDecimal(v)) return 405;
+    if (m[2] === 'id' && (v.length === 0 || v.length > 255)) return 405;
+    o[m[2].replace('score.', 'score_')] = v; return 0;
+  }
+  m = /^cmi\.interactions\.(\d+)\.(.+)$/.exec(el);
+  if (m) {
+    const i = +m[1];
+    if (i > r.interactions.length) return 201;
+    const it = r.interactions[i] || (r.interactions[i] = {});
+    const sub = /^(objectives|correct_responses)\.(\d+)\.(id|pattern)$/.exec(m[2]);
+    if (sub) { const list = it[sub[1]] || (it[sub[1]] = []); if (+sub[2] > list.length) return 201; list[+sub[2]] = v; return 0; }
+    if (!['id', 'time', 'type', 'weighting', 'student_response', 'result', 'latency'].includes(m[2])) return 401;
+    it[m[2]] = v; return 0;
+  }
+  return 401;
+}
+
+function apiCall(fn, args, body) {
+  let ret, code = 0;
+  try { [ret, code] = body(); }
+  catch (e) { ret = 'false'; code = 101; issue('error', fn + ' threw inside the test LMS: ' + e.message); }
+  if (!LOOKUPS.has(fn)) lastErr = code;
+  logCall(fn, args, ret, code);
+  scheduleRender();
+  return ret;
+}
+
+window.API = {
+  LMSInitialize(arg = '') {
+    return apiCall('LMSInitialize', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      if (!session) { issue('error', 'LMSInitialize was called while no session was open.'); return ['false', 101]; }
+      if (session.finished) { issue('error', 'LMSInitialize was called again after LMSFinish in the same launch.'); return ['false', 101]; }
+      if (session.initialized) { issue('warn', 'LMSInitialize was called more than once.'); return ['false', 101]; }
+      session.initialized = true;
+      return ['true', 0];
+    });
+  },
+  LMSFinish(arg = '') {
+    return apiCall('LMSFinish', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      if (!sessionOpen('LMSFinish')) return ['false', 301];
+      finishSession();
+      return ['true', 0];
+    });
+  },
+  LMSGetValue(el) {
+    return apiCall('LMSGetValue', [el], () => {
+      if (!sessionOpen('LMSGetValue')) return ['', 301];
+      const [v, code] = getValue(String(el));
+      return [code ? '' : String(v), code];
+    });
+  },
+  LMSSetValue(el, val) {
+    return apiCall('LMSSetValue', [el, val], () => {
+      if (!sessionOpen('LMSSetValue')) return ['false', 301];
+      const code = setValue(String(el), String(val));
+      if (code === 0) session.uncommitted++;
+      return [code ? 'false' : 'true', code];
+    });
+  },
+  LMSCommit(arg = '') {
+    return apiCall('LMSCommit', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      if (!sessionOpen('LMSCommit')) return ['false', 301];
+      commit();
+      return ['true', 0];
+    });
+  },
+  LMSGetLastError() { return apiCall('LMSGetLastError', [], () => [String(lastErr), 0]); },
+  LMSGetErrorString(code) { return apiCall('LMSGetErrorString', [code], () => [ERRORS[+code] || '', 0]); },
+  LMSGetDiagnostic(code) { return apiCall('LMSGetDiagnostic', [code], () => [ERRORS[+(code === '' || code == null ? lastErr : code)] || '', 0]); }
+};
+
+function commit() {
+  saved = clone(rec);
+  persist();
+  session.uncommitted = 0;
+  session.commits++;
+}
+
+// What a SCORM 1.2 LMS does when the course calls LMSFinish
+function finishSession() {
+  if (session.sessionTime) rec.total_time = fromCs(toCs(rec.total_time) + toCs(session.sessionTime));
+  else issue('warn', 'The course did not send cmi.core.session_time, so the LMS records no time for this session.');
+
+  if (sco.masteryScore !== '' && rec.score_raw !== '') {
+    const st = +rec.score_raw >= +sco.masteryScore ? 'passed' : 'failed';
+    if (rec.lesson_status !== st) {
+      note('LMS rule: score ' + rec.score_raw + ' vs mastery score ' + sco.masteryScore + ', so lesson_status becomes "' + st + '".');
+      rec.lesson_status = st;
+    }
+  }
+  if (rec.lesson_status === 'not attempted') {
+    issue('warn', 'The course never set cmi.core.lesson_status. LMSs differ in what they record in this case.');
+  }
+
+  const complete = ['passed', 'completed', 'failed'].includes(rec.lesson_status);
+  if (session.exit === 'suspend') {
+    rec.entry = 'resume';
+  } else {
+    rec.entry = '';
+    if (!complete) {
+      issue('warn', 'The course ended incomplete without setting cmi.core.exit to "suspend". Some LMSs will start a new attempt next time and discard saved progress (turn on "Strict resume" to test this).');
+      if ($('strict').checked) {
+        rec.suspend_data = ''; rec.lesson_location = ''; rec.entry = 'ab-initio';
+        note('Strict resume: no "suspend" on exit, so the next launch starts a new attempt (suspend_data and lesson_location cleared).');
+      }
+    }
+  }
+  session.finished = true;
+  commit();
+  note('Session finished. Status "' + rec.lesson_status + '", next entry "' + (rec.entry || '(blank)') + '", total time ' + rec.total_time + '.');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Launch / end session
+// ════════════════════════════════════════════════════════════════════════════
+function launch() {
+  if (!sco) return;
+  endSession(() => {
+    saved = loadSaved();
+    saved.launches++;
+    persist();
+    rec = clone(saved);
+    session = { initialized: false, finished: false, exit: '', sessionTime: '', uncommitted: 0, commits: 0, entry: rec.entry };
+    launchT0 = Date.now();
+    note('Launch #' + saved.launches + ': ' + sco.href + '  (entry "' + (rec.entry || '(blank)') + '")');
+    $('empty').hidden = true;
+    frame.src = sco.url;
+    $('btnLaunch').textContent = 'Relaunch';
+    $('btnEnd').disabled = false;
+    scheduleRender();
+  });
+}
+
+// Unload the course (fires its unload handlers), then audit what it did
+function endSession(then) {
+  if (!session) { if (then) then(); return; }
+  frame.addEventListener('load', function onBlank() {
+    frame.removeEventListener('load', onBlank);
+    const s = session;
+    if (!s.initialized) issue('error', 'The course never called LMSInitialize. It probably did not find the SCORM 1.2 API (window.API).');
+    else if (!s.finished) {
+      issue('warn', 'The course was closed without calling LMSFinish.');
+      if (s.uncommitted) issue('error', s.uncommitted + ' value(s) were set but never committed before the course closed. A real LMS may lose them.');
+    }
+    note('Session ended.');
+    session = null;
+    $('btnEnd').disabled = true;
+    scheduleRender();
+    if (then) then();
+  }, { once: false });
+  frame.src = 'about:blank';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Manifest
+// ════════════════════════════════════════════════════════════════════════════
+const XML_NS = 'http://www.w3.org/XML/1998/namespace';
+async function readManifest(base) {
+  const res = await fetch(base + 'imsmanifest.xml');
+  if (!res.ok) throw new Error('Could not read imsmanifest.xml');
+  const doc = new DOMParser().parseFromString(await res.text(), 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('imsmanifest.xml is not valid XML.');
+  const all = (root, name) => Array.from(root.getElementsByTagNameNS('*', name));
+  const childText = (el, name) => {
+    const c = Array.from(el.children).find(x => x.localName.toLowerCase() === name);
+    return c ? c.textContent.trim() : '';
+  };
+  const attrByLocal = (el, name) => {
+    const a = Array.from(el.attributes).find(x => x.localName.toLowerCase() === name);
+    return a ? a.value : '';
+  };
+  const root = doc.documentElement;
+  const schemaVersion = (all(doc, 'schemaversion')[0]?.textContent || '').trim();
+  const resourcesEl = all(doc, 'resources')[0];
+  const resources = {};
+  all(doc, 'resource').forEach(r => {
+    resources[r.getAttribute('identifier')] = { href: r.getAttribute('href') || '', base: r.getAttributeNS(XML_NS, 'base') || '', type: attrByLocal(r, 'scormtype') };
+  });
+  const orgsEl = all(doc, 'organizations')[0];
+  const orgs = all(doc, 'organization');
+  const org = orgs.find(o => o.getAttribute('identifier') === orgsEl?.getAttribute('default')) || orgs[0];
+  const prefix = (root.getAttributeNS(XML_NS, 'base') || '') + (resourcesEl?.getAttributeNS(XML_NS, 'base') || '');
+  const scos = [];
+  (org ? all(org, 'item') : []).forEach(it => {
+    const r = resources[it.getAttribute('identifierref')];
+    if (!r || !r.href) return;
+    let href = /^https?:/i.test(r.href) ? r.href : prefix + r.base + r.href;
+    const params = it.getAttribute('parameters') || '';
+    if (params) href += params.startsWith('#') ? params : (href.includes('?') ? '&' : '?') + params.replace(/^[?&]/, '');
+    scos.push({
+      id: it.getAttribute('identifier') || it.getAttribute('identifierref'),
+      title: childText(it, 'title') || it.getAttribute('identifierref'),
+      href, url: /^https?:/i.test(href) ? href : base + href, type: r.type,
+      masteryScore: childText(it, 'masteryscore'), launchData: childText(it, 'datafromlms'),
+      maxTime: childText(it, 'maxtimeallowed'), timeLimitAction: childText(it, 'timelimitaction')
+    });
+  });
+  return {
+    identifier: root.getAttribute('identifier') || '',
+    title: org ? childText(org, 'title') : '',
+    schemaVersion,
+    is2004: /2004|cam 1\.3/i.test(schemaVersion) || Array.from(root.attributes).some(a => a.value.includes('adlcp_v1p3')),
+    scos
+  };
+}
+
+function showBanner(text, isErr) {
+  const b = $('banner');
+  b.hidden = !text; b.textContent = text || ''; b.classList.toggle('err', !!isErr);
+}
+
+const NO_SERVER = 'The test LMS server is not running, or this page was opened directly as a file. In a terminal, run:  node scorm-test-lms.js  then use the page it opens (http://localhost:7830/).';
+async function getPackageInfo() {
+  if (location.protocol === 'file:') throw new Error(NO_SERVER);
+  let res;
+  try { res = await fetch('/api/package'); } catch { throw new Error(NO_SERVER); }
+  if (!res.ok) throw new Error(NO_SERVER);
+  return res.json();
+}
+
+async function openCurrentPackage() {
+  let info;
+  try { info = await getPackageInfo(); }
+  catch (e) { showBanner(e.message, true); return; }
+  if (!info.id) { if (info.error) showBanner('Could not load the package: ' + info.error, true); return; }
+  pkg = info;
+  const base = '/pkg/' + pkg.id + '/';
+  try { manifest = await readManifest(base); }
+  catch (e) { showBanner(e.message, true); return; }
+  if (!manifest.scos.length) { showBanner('imsmanifest.xml has no launchable items.', true); return; }
+  showBanner(manifest.is2004 ? 'This looks like a SCORM 2004 package (schema version "' + manifest.schemaVersion + '"). This test LMS only provides the SCORM 1.2 API, so the course will probably say it cannot find the LMS.' : '', false);
+  $('pkgName').textContent = (manifest.title || pkg.name) + '  ·  ' + pkg.name;
+  document.title = 'SCORM Test LMS · ' + (manifest.title || pkg.name);
+  const sel = $('scoSel');
+  sel.innerHTML = '';
+  manifest.scos.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.title; sel.appendChild(o); });
+  sel.hidden = manifest.scos.length < 2;
+  sco = manifest.scos[0];
+  issues.clear(); renderIssues();
+  ['btnLaunch', 'btnReset', 'statusSel'].forEach(id => $(id).disabled = false);
+  launch();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Rendering the learner record
+// ════════════════════════════════════════════════════════════════════════════
+let renderQueued = false;
+function scheduleRender() { if (!renderQueued) { renderQueued = true; requestAnimationFrame(render); } }
+function render() {
+  renderQueued = false;
+  const tbl = $('recTbl');
+  if (!sco) { tbl.innerHTML = '<tr><td class="v-muted">No package loaded.</td></tr>'; return; }
+  const r = rec || loadSaved();
+  const rows = [];
+  const add = (k, v, cls) => rows.push('<tr><th>' + k + '</th><td class="' + (cls || '') + '">' + v + '</td></tr>');
+  const group = t => rows.push('<tr class="group"><th colspan="2">' + t + '</th></tr>');
+  const blank = v => v === '' ? '<span class="v-muted">(blank)</span>' : esc(v);
+  group('Learner record (as the course sees it)');
+  add('lesson_status', esc(r.lesson_status), ['passed', 'completed'].includes(r.lesson_status) ? 'v-ok' : '');
+  add('score', r.score_raw === '' ? '<span class="v-muted">(none)</span>' : esc(r.score_raw) + ' <span class="v-muted">(min ' + (esc(r.score_min) || '–') + ', max ' + (esc(r.score_max) || '–') + ')</span>');
+  add('lesson_location', blank(r.lesson_location));
+  add('suspend_data', r.suspend_data === '' ? '<span class="v-muted">(blank)</span>' :
+    '<details><summary>' + r.suspend_data.length + ' / 4096 chars</summary><pre>' + esc(r.suspend_data) + '</pre></details>');
+  add('total_time', esc(r.total_time));
+  if (r.objectives.length) add('objectives', String(r.objectives.length));
+  if (r.interactions.length) add('interactions', String(r.interactions.length));
+  if (sco.masteryScore) add('mastery_score', esc(sco.masteryScore));
+  group('This session');
+  if (session) {
+    add('state', session.finished ? 'finished' : session.initialized ? '<span class="v-ok">initialized</span>' : 'waiting for LMSInitialize');
+    add('entry', blank(session.entry));
+    add('exit', blank(session.exit));
+    add('session_time', blank(session.sessionTime));
+    add('commits', String(session.commits));
+    add('uncommitted', session.uncommitted ? '<span style="color:var(--warn)">' + session.uncommitted + ' change(s)</span>' : '0');
+  } else {
+    add('state', '<span class="v-muted">not running</span>');
+    add('next entry', blank(r.entry));
+  }
+  add('launches', String((saved || r).launches));
+  tbl.innerHTML = rows.join('');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Controls
+// ════════════════════════════════════════════════════════════════════════════
+$('btnLaunch').addEventListener('click', launch);
+$('btnEnd').addEventListener('click', () => endSession());
+$('scoSel').addEventListener('change', e => { endSession(() => { sco = manifest.scos[+e.target.value]; rec = null; saved = null; launch(); }); });
+
+$('btnReset').addEventListener('click', () => {
+  if (!confirm('Erase this learner\'s saved record for this course (status, score, progress, time) and relaunch?')) return;
+  endSession(() => {
+    try { localStorage.removeItem(recordKey()); } catch {}
+    rec = null; saved = null;
+    issues.clear(); renderIssues();
+    note('Learner record reset.');
+    launch();
+  });
+});
+
+$('statusSel').addEventListener('change', e => {
+  const v = e.target.value; e.target.value = '';
+  if (!v) return;
+  // Close the course first so its own exit handling can't overwrite the status we set
+  endSession(() => {
+    saved = loadSaved();
+    saved.lesson_status = v;
+    if (v === 'not attempted') saved.entry = 'ab-initio';
+    persist();
+    rec = null;
+    note('Learner status set to "' + v + '" by the tester.');
+    launch();
+  });
+});
+
+const strictBox = $('strict');
+try { strictBox.checked = localStorage.getItem('scormlms:strict') === '1'; } catch {}
+strictBox.addEventListener('change', () => { try { localStorage.setItem('scormlms:strict', strictBox.checked ? '1' : '0'); } catch {} });
+
+$('hideLookups').addEventListener('change', e => {
+  document.querySelectorAll('#log .row.lookup').forEach(r => r.classList.toggle('hidden', e.target.checked));
+});
+$('btnClear').addEventListener('click', () => { $('log').innerHTML = ''; });
+$('btnCopy').addEventListener('click', async () => {
+  const text = Array.from(document.querySelectorAll('#log .row')).filter(r => !r.classList.contains('hidden'))
+    .map(r => r.querySelector('.t').textContent + '  ' + r.querySelector('.c').textContent).join('\n');
+  try { await navigator.clipboard.writeText(text); $('btnCopy').textContent = 'Copied'; }
+  catch { $('btnCopy').textContent = 'Copy failed'; }
+  setTimeout(() => { $('btnCopy').textContent = 'Copy'; }, 1500);
+});
+
+// ── Loading a package from the page ──
+async function upload(file) {
+  if (!/\.zip$/i.test(file.name)) { showBanner('Please choose a .zip SCORM package.', true); return; }
+  if (location.protocol === 'file:') { showBanner(NO_SERVER, true); return; }
+  showBanner('Unpacking ' + file.name + '…', false);
+  const doUpload = async () => {
+    try {
+      let res;
+      try { res = await fetch('/upload', { method: 'POST', body: file, headers: { 'X-Filename': encodeURIComponent(file.name) } }); }
+      catch { throw new Error(NO_SERVER); }
+      const out = await res.json().catch(() => ({ error: 'The server sent an unexpected response (HTTP ' + res.status + ').' }));
+      if (!res.ok) throw new Error('Could not load ' + file.name + ': ' + out.error);
+      showBanner('', false);
+      sco = null; rec = null; saved = null;
+      await openCurrentPackage();
+    } catch (e) {
+      showBanner(e.message, true);
+    }
+  };
+  if (session) endSession(doUpload); else await doUpload();
+}
+$('btnOpen').addEventListener('click', () => $('fileIn').click());
+$('fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); });
+
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { if (e.dataTransfer.types.includes('Files')) { dragDepth++; $('dropOverlay').hidden = false; } });
+document.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('dropOverlay').hidden = true; });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
+  const f = e.dataTransfer.files[0]; if (f) upload(f);
+});
+
+render();
+openCurrentPackage();
+</script>
+</body>
+</html>

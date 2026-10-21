@@ -52,7 +52,16 @@ Only this computer can reach the test LMS. Unzipped packages go in a temporary f
   - no session time
   - leaving incomplete without asking to resume (`suspend`)
   - a course that never finds the LMS
-- **LMS calls:** every call, with its result and any SCORM error code. **Copy** puts the log on your clipboard to share.
+- **LMS calls:** every call, with its result and any SCORM error code. **hide lookups** hides the course's error lookups (`GetLastError`, `GetErrorString` and `GetDiagnostic`), which most courses make after every call.
+  - **Copy** puts the log on your clipboard to share.
+  - **↓ CSV** downloads the log as a spreadsheet (`<course>-lms-calls-<date>-<time>.csv`, or `…-lrs-requests-…` for xAPI). It has one row per log line, with the same rows as Copy. Long values such as `suspend_data`, shortened in the log, are in full. The columns are:
+    - Time since launch, and Clock time
+    - Type (Call, Error lookup, Note or LRS request)
+    - Call or request
+    - Argument 1 and Argument 2 (for example, the data model element and the value)
+    - Result
+    - Error code and Error
+    - Notes (the text of notes, plus xAPI summaries and statements)
 
 Click a section's heading, or Tab to it and press Enter, to collapse or expand it.
 - **With the log open:** the log gets the room the collapsed sections free up.

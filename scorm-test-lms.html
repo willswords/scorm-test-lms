@@ -67,6 +67,8 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 .panel section.collapsed h2 > :not(.sec-toggle):not(.count){display:none}
 .panel h2 .grow{flex:1}
 .panel h2 button,.panel h2 label{text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;padding:2px 8px}
+#logSec h2{flex-wrap:wrap;row-gap:4px}
+#logSec h2 > *{white-space:nowrap;flex-shrink:0}
 .rec{width:100%;border-collapse:collapse;font-size:12px}
 .rec th{text-align:left;font-weight:400;color:var(--muted);padding:2px 10px 2px 0;white-space:nowrap;vertical-align:top;width:1%}
 .rec td{font-family:var(--mono);word-break:break-all;padding:2px 0}
@@ -174,8 +176,8 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
     </section>
     <section id="logSec">
       <h2><button class="sec-toggle" data-sec="logSec" aria-expanded="true" aria-controls="logSec"><span class="chev" aria-hidden="true"></span><span id="logTitle">LMS calls</span></button> <span class="grow"></span>
-        <label class="chk"><input type="checkbox" id="hideLookups" checked/> hide error lookups</label>
-        <button id="btnCopy">Copy</button><button id="btnClear">Clear</button>
+        <label class="chk" title="Hide the course's error lookups (GetLastError, GetErrorString and GetDiagnostic calls)"><input type="checkbox" id="hideLookups" checked/> hide lookups</label>
+        <button id="btnCopy">Copy</button><button id="btnCsv" title="Download the log as a CSV file" aria-label="Download the log as a CSV file">↓ CSV</button><button id="btnClear">Clear</button>
       </h2>
       <div id="log" role="log" aria-label="LMS call log"></div>
     </section>
@@ -270,12 +272,20 @@ function elapsed() {
   const ms = launchT0 ? Date.now() - launchT0 : 0;
   return Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0') + '.' + String(ms % 1000).padStart(3, '0');
 }
-function logRow(cls, html, isLookup) {
+function clockTime(d) {
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + p(d.getMilliseconds(), 3);
+}
+// The full, untruncated values behind each log row, for the CSV download
+const rowData = new WeakMap();
+function logRow(cls, html, isLookup, data) {
   const log = $('log');
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
   const row = document.createElement('div');
+  const t = elapsed();
   row.className = 'row ' + cls + (isLookup ? ' lookup' + ($('hideLookups').checked ? ' hidden' : '') : '');
-  row.innerHTML = '<span class="t">' + elapsed() + '</span><span class="c">' + html + '</span>';
+  row.innerHTML = '<span class="t">' + t + '</span><span class="c">' + html + '</span>';
+  rowData.set(row, Object.assign({ time: t, clock: clockTime(new Date()) }, data));
   log.appendChild(row);
   while (log.childElementCount > MAX_ROWS) log.firstElementChild.remove();
   if (stick) log.scrollTop = log.scrollHeight;
@@ -284,11 +294,13 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 function short(v) { v = String(v); return v.length > 160 ? v.slice(0, 160) + '… (' + v.length + ' chars)' : v; }
 function logCall(fn, args, ret, code) {
   const a = args.map(x => '"' + esc(short(x)) + '"').join(', ');
+  const isErr = code && !LOOKUPS.has(fn);
+  const msg = isErr ? (scormVer === '2004' ? ERRORS04 : ERRORS)[code] || '' : '';
   let html = '<span class="fn">' + fn + '</span>(' + a + ') <span class="ret">→ "' + esc(short(ret)) + '"</span>';
-  if (code && !LOOKUPS.has(fn)) html += ' — error ' + code + ' ' + esc((scormVer === '2004' ? ERRORS04 : ERRORS)[code] || '');
-  logRow(code && !LOOKUPS.has(fn) ? 'err' : '', html, LOOKUPS.has(fn));
+  if (isErr) html += ' — error ' + code + ' ' + esc(msg);
+  logRow(isErr ? 'err' : '', html, LOOKUPS.has(fn), { type: LOOKUPS.has(fn) ? 'Error lookup' : 'Call', call: fn, arg1: args[0], arg2: args[1], result: ret, code: isErr ? code : '', error: msg });
 }
-const note = text => logRow('note', esc(text), false);
+const note = text => logRow('note', esc(text), false, { type: 'Note', notes: text });
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SCORM 1.2 API (window.API)
@@ -1217,7 +1229,9 @@ function onXapiEvent(ev) {
   if (ev.statements && ev.statements.length) html += '<br/>' + ev.statements.map(s => '• ' + esc(s)).join('<br/>');
   if (ev.status >= 400 && ev.error) html += '<br/>' + esc(ev.error);
   const expected404 = ev.status === 404 && ev.method === 'GET' && /^(activities\/state|activities\/profile|agents\/profile)$/.test(ev.resource);
-  logRow(ev.status >= 400 && !expected404 ? 'err' : '', html, false);
+  const isErr = ev.status >= 400 && !expected404;
+  logRow(isErr ? 'err' : '', html, false, { type: 'LRS request', call: ev.method + ' /' + ev.resource, arg1: detail.trim(), result: ev.status,
+    code: isErr ? ev.status : '', error: ev.status >= 400 ? ev.error || '' : '', notes: [ev.summary, ...(ev.statements || [])].filter(Boolean).join('\n') });
   (ev.issues || []).forEach(([level, msg]) => issue(level, msg));
   scheduleSummary();
 }
@@ -1394,12 +1408,36 @@ $('hideLookups').addEventListener('change', e => {
   document.querySelectorAll('#log .row.lookup').forEach(r => r.classList.toggle('hidden', e.target.checked));
 });
 $('btnClear').addEventListener('click', () => { $('log').innerHTML = ''; });
+const shownRows = () => Array.from(document.querySelectorAll('#log .row')).filter(r => !r.classList.contains('hidden'));
 $('btnCopy').addEventListener('click', async () => {
-  const text = Array.from(document.querySelectorAll('#log .row')).filter(r => !r.classList.contains('hidden'))
-    .map(r => r.querySelector('.t').textContent + '  ' + r.querySelector('.c').textContent).join('\n');
+  const text = shownRows().map(r => r.querySelector('.t').textContent + '  ' + r.querySelector('.c').textContent).join('\n');
   try { await navigator.clipboard.writeText(text); $('btnCopy').textContent = 'Copied'; }
   catch { $('btnCopy').textContent = 'Copy failed'; }
   setTimeout(() => { $('btnCopy').textContent = 'Copy'; }, 1500);
+});
+// Same rows as Copy, with full values (the log shortens long ones), in columns for a spreadsheet
+const CSV_COLUMNS = [['time', 'Time since launch'], ['clock', 'Clock time'], ['type', 'Type'], ['call', 'Call or request'],
+  ['arg1', 'Argument 1'], ['arg2', 'Argument 2'], ['result', 'Result'], ['code', 'Error code'], ['error', 'Error'], ['notes', 'Notes']];
+function csvCell(v) {
+  v = v === undefined || v === null ? '' : String(v);
+  return /[",\r\n]|^\s|\s$/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+$('btnCsv').addEventListener('click', () => {
+  const lines = [CSV_COLUMNS.map(c => c[1])].concat(shownRows().map(r => {
+    const d = rowData.get(r) || { notes: r.querySelector('.c').textContent };
+    return CSV_COLUMNS.map(c => d[c[0]]);
+  }));
+  // The byte-order mark lets Excel read the file as UTF-8
+  const csv = '﻿' + lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  const title = pkg ? (manifest && manifest.title) || pkg.name : '';
+  let slug = String(title).replace(/\.zip$/i, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (slug.length > 60) slug = slug.slice(0, 61).replace(/-[^-]*$/, '') || slug.slice(0, 60);   // cut long titles at a word break
+  const stamp = clockTime(new Date()).slice(0, 16).replace(/[-: ]/g, '').replace(/^(\d{8})/, '$1-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = (slug ? slug + '-' : '') + (scormVer === 'xapi' ? 'lrs-requests' : 'lms-calls') + '-' + stamp + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
 
 // ── Loading a package from the page ──

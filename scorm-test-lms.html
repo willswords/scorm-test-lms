@@ -50,8 +50,21 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);font-size:15px}
 
 .panel{display:flex;flex-direction:column;min-height:0;overflow:hidden}
-.panel section{padding:10px 14px;border-bottom:1px solid var(--border)}
-.panel h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+/* Sections share the panel. While the call log is open it takes all the room the other sections don't use, and
+   those are capped so they can't crowd it out; collapsing one gives its room to the log. With the log collapsed,
+   the caps come off and the open sections grow to show their full content (scrolling inside if still too tall). */
+.panel section{padding:0 14px 10px;border-bottom:1px solid var(--border);flex:0 1 auto;min-height:0;overflow:auto}
+.panel h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding-top:10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;
+  position:sticky;top:0;background:var(--bg);z-index:1}
+.panel h2 .sec-toggle{all:unset;display:inline-flex;align-items:center;gap:6px;cursor:pointer;border-radius:4px;color:inherit}
+.panel h2 .sec-toggle:hover{color:var(--text)}
+.panel h2 .sec-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chev::before{content:'\25BE';display:inline-block;width:12px;font-size:14px;line-height:1;text-align:center;transition:transform .15s}
+.panel section.collapsed{flex:0 0 auto;overflow:hidden}
+.panel section.collapsed .chev::before{transform:rotate(-90deg)}
+.panel section.collapsed > :not(h2){display:none !important}
+.panel section.collapsed h2{margin-bottom:0}
+.panel section.collapsed h2 > :not(.sec-toggle):not(.count){display:none}
 .panel h2 .grow{flex:1}
 .panel h2 button,.panel h2 label{text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;padding:2px 8px}
 .rec{width:100%;border-collapse:collapse;font-size:12px}
@@ -60,10 +73,15 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 .rec tr.group th{padding-top:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .rec details summary{cursor:pointer;color:var(--muted);font-family:var(--sans)}
 .rec details pre{margin:4px 0 0;white-space:pre-wrap;max-height:120px;overflow:auto;background:var(--surface2);padding:6px;border-radius:4px}
+.verbadge{display:inline-block;font-weight:600;font-size:13px;padding:2px 10px;border-radius:999px;
+  background:var(--surface2);border:1px solid var(--accent);color:var(--accent);margin-bottom:6px}
+.sl-head{margin-top:10px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.sl-head .v-muted{text-transform:none;letter-spacing:0;font-weight:400}
+.chk.sl{margin-top:6px;color:var(--text);font-weight:600}
+.sl-note{font:11px/1.5 var(--mono);color:var(--muted);margin:2px 0 0 22px;word-break:break-all}
 .v-ok{color:var(--ok)}
 .v-muted{color:var(--muted)}
 
-#issuesSec{max-height:28%;overflow:auto}
 #issues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 #issues li{padding:5px 8px;border-radius:5px;background:var(--warn-bg);color:var(--warn);font-size:12px}
 #issues li.error{background:var(--err-bg);color:var(--err)}
@@ -71,7 +89,10 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 #issues .none{background:none;color:var(--muted);padding:0}
 .count{font-family:var(--mono);background:var(--surface2);border-radius:9px;padding:0 7px;color:var(--text);letter-spacing:0}
 
-#logSec{flex:1;display:flex;flex-direction:column;min-height:120px;border-bottom:0}
+.panel:has(#logSec:not(.collapsed)) #recSec{max-height:35%}
+.panel:has(#logSec:not(.collapsed)) #issuesSec{max-height:25%}
+#logSec{flex:1 1 0;display:flex;flex-direction:column;min-height:min(240px,40%);border-bottom:0;overflow:hidden}
+#logSec.collapsed{flex:0 0 auto;min-height:0}
 #log{flex:1;min-height:0;overflow:auto;font:12px/1.5 var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:6px}
 .row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:1px 8px;border-bottom:1px solid var(--surface2)}
 .row .t{color:var(--muted)}
@@ -96,7 +117,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 </head>
 <body>
 <header class="bar">
-  <div class="brand">SCORM Test LMS<small>SCORM 1.2</small></div>
+  <div class="brand">SCORM Test LMS<small id="verLabel">SCORM 1.2 · 2004 · xAPI</small></div>
   <div class="pkg">
     <span id="pkgName">No package loaded</span>
     <select id="scoSel" hidden aria-label="Course item (SCO)"></select>
@@ -117,8 +138,9 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
     </label>
     <button id="btnReset" disabled>Reset learner</button>
     <span class="sep"></span>
-    <label class="chk" title="Like many LMSs: if the course exits without cmi.core.exit = &quot;suspend&quot;, the next launch starts a fresh attempt and saved progress is discarded."><input type="checkbox" id="strict"/> Strict resume</label>
+    <label class="chk" id="strictLbl" title="Like many LMSs: if the course exits without cmi.core.exit = &quot;suspend&quot;, the next launch starts a fresh attempt and saved progress is discarded."><input type="checkbox" id="strict"/> Strict resume</label>
     <button id="btnOpen">Open package…</button>
+    <button id="btnClose" disabled title="Unload this package and return to the start screen">Close package</button>
     <input type="file" id="fileIn" accept=".zip,application/zip" hidden/>
   </div>
 </header>
@@ -126,19 +148,32 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
 <main>
   <section class="stage">
     <iframe id="scoFrame" title="Course"></iframe>
-    <div class="empty" id="empty">Drop a SCORM 1.2 .zip anywhere on this page,<br/>or click “Open package…”.</div>
+    <div class="empty" id="empty">Drop a SCORM 1.2, SCORM 2004 or xAPI (Tin Can) .zip anywhere on this page,<br/>or click “Open package…”.</div>
   </section>
   <aside class="panel">
-    <section>
-      <h2>Learner record</h2>
+    <section id="pkgSec">
+      <h2><button class="sec-toggle" data-sec="pkgSec" aria-expanded="true" aria-controls="pkgSec"><span class="chev" aria-hidden="true"></span>Package</button></h2>
+      <div id="pkgInfo"><span class="v-muted">No package loaded.</span></div>
+      <div id="slBox" hidden>
+        <div class="sl-head">Storyline testing <span class="v-muted">(files are swapped as they&rsquo;re served; the package isn&rsquo;t changed)</span></div>
+        <label class="chk sl"><input type="checkbox" id="slFree"/> Free navigation (menu)</label>
+        <div class="sl-note" id="slNote"></div>
+        <label class="chk sl"><input type="checkbox" id="slSeek"/> Unlock seekbar</label>
+        <div class="sl-note" id="slSeekNote"></div>
+        <label class="chk sl"><input type="checkbox" id="slNav"/> Unlock Next/Prev buttons</label>
+        <div class="sl-note" id="slNavNote"></div>
+      </div>
+    </section>
+    <section id="recSec">
+      <h2><button class="sec-toggle" data-sec="recSec" aria-expanded="true" aria-controls="recSec"><span class="chev" aria-hidden="true"></span>Learner record</button></h2>
       <table class="rec" id="recTbl"></table>
     </section>
     <section id="issuesSec">
-      <h2>Issues <span class="count" id="issueCount">0</span></h2>
+      <h2><button class="sec-toggle" data-sec="issuesSec" aria-expanded="true" aria-controls="issuesSec"><span class="chev" aria-hidden="true"></span>Issues</button> <span class="count" id="issueCount">0</span></h2>
       <ul id="issues"><li class="none">None so far.</li></ul>
     </section>
     <section id="logSec">
-      <h2>LMS calls <span class="grow"></span>
+      <h2><button class="sec-toggle" data-sec="logSec" aria-expanded="true" aria-controls="logSec"><span class="chev" aria-hidden="true"></span><span id="logTitle">LMS calls</span></button> <span class="grow"></span>
         <label class="chk"><input type="checkbox" id="hideLookups" checked/> hide error lookups</label>
         <button id="btnCopy">Copy</button><button id="btnClear">Clear</button>
       </h2>
@@ -161,7 +196,12 @@ let rec = null;        // working copy for the current session (persisted on com
 let session = null;    // per-launch state
 let launchT0 = 0;
 let lastErr = 0;
+let scormVer = '1.2';  // '1.2' or '2004', from the package's manifest
 const issues = new Map();
+// Names of the API calls in the current SCORM version, for messages
+const fnName = k => (scormVer === '2004'
+  ? { init: 'Initialize', finish: 'Terminate', get: 'GetValue', set: 'SetValue', commit: 'Commit' }
+  : { init: 'LMSInitialize', finish: 'LMSFinish', get: 'LMSGetValue', set: 'LMSSetValue', commit: 'LMSCommit' })[k];
 
 const $ = id => document.getElementById(id);
 const frame = $('scoFrame');
@@ -171,6 +211,7 @@ const clone = o => JSON.parse(JSON.stringify(o));
 //  Learner record persistence (per package + SCO, in this browser)
 // ════════════════════════════════════════════════════════════════════════════
 function newRecord() {
+  if (scormVer === '2004') return newRecord04();
   return {
     lesson_status: 'not attempted', lesson_location: '', entry: 'ab-initio',
     score_raw: '', score_min: '', score_max: '', suspend_data: '', comments: '',
@@ -179,7 +220,7 @@ function newRecord() {
     objectives: [], interactions: []
   };
 }
-const recordKey = () => 'scormlms:' + (manifest.identifier || pkg.name) + '|' + sco.id;
+const recordKey = () => 'scormlms:' + (scormVer === '2004' ? '2004:' : '') + (manifest.identifier || pkg.name) + '|' + sco.id;
 function loadSaved() {
   try { const r = JSON.parse(localStorage.getItem(recordKey())); if (r) return Object.assign(newRecord(), r); } catch {}
   return newRecord();
@@ -223,7 +264,7 @@ function renderIssues() {
   $('issueCount').textContent = issues.size;
 }
 
-const LOOKUPS = new Set(['LMSGetLastError', 'LMSGetErrorString', 'LMSGetDiagnostic']);
+const LOOKUPS = new Set(['LMSGetLastError', 'LMSGetErrorString', 'LMSGetDiagnostic', 'GetLastError', 'GetErrorString', 'GetDiagnostic']);
 const MAX_ROWS = 3000;
 function elapsed() {
   const ms = launchT0 ? Date.now() - launchT0 : 0;
@@ -244,7 +285,7 @@ function short(v) { v = String(v); return v.length > 160 ? v.slice(0, 160) + '�
 function logCall(fn, args, ret, code) {
   const a = args.map(x => '"' + esc(short(x)) + '"').join(', ');
   let html = '<span class="fn">' + fn + '</span>(' + a + ') <span class="ret">→ "' + esc(short(ret)) + '"</span>';
-  if (code && !LOOKUPS.has(fn)) html += ' — error ' + code + ' ' + esc(ERRORS[code] || '');
+  if (code && !LOOKUPS.has(fn)) html += ' — error ' + code + ' ' + esc((scormVer === '2004' ? ERRORS04 : ERRORS)[code] || '');
   logRow(code && !LOOKUPS.has(fn) ? 'err' : '', html, LOOKUPS.has(fn));
 }
 const note = text => logRow('note', esc(text), false);
@@ -268,8 +309,8 @@ const READ_ONLY = new Set(['cmi.core.student_id', 'cmi.core.student_name', 'cmi.
 
 function sessionOpen(fn) {
   if (!session) { issue('error', fn + ' was called while no session was open (for example, after the course was closed).'); return false; }
-  if (session.finished) { issue('error', fn + ' was called after LMSFinish. Real LMSs ignore or reject these calls.'); return false; }
-  if (!session.initialized) { issue('error', fn + ' was called before LMSInitialize.'); return false; }
+  if (session.finished) { issue('error', fn + ' was called after ' + fnName('finish') + '. Real LMSs ignore or reject these calls.'); return false; }
+  if (!session.initialized) { issue('error', fn + ' was called before ' + fnName('init') + '.'); return false; }
   return true;
 }
 
@@ -362,7 +403,7 @@ function apiCall(fn, args, body) {
   return ret;
 }
 
-window.API = {
+const API12 = {
   LMSInitialize(arg = '') {
     return apiCall('LMSInitialize', [arg], () => {
       if (String(arg) !== '') return ['false', 201];
@@ -451,18 +492,356 @@ function finishSession() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  SCORM 2004 API (window.API_1484_11)
+// ════════════════════════════════════════════════════════════════════════════
+const ERRORS04 = {
+  0: 'No Error', 101: 'General Exception', 102: 'General Initialization Failure', 103: 'Already Initialized',
+  104: 'Content Instance Terminated', 111: 'General Termination Failure', 112: 'Termination Before Initialization',
+  113: 'Termination After Termination', 122: 'Retrieve Data Before Initialization', 123: 'Retrieve Data After Termination',
+  132: 'Store Data Before Initialization', 133: 'Store Data After Termination', 142: 'Commit Before Initialization',
+  143: 'Commit After Termination', 201: 'General Argument Error', 301: 'General Get Failure', 351: 'General Set Failure',
+  391: 'General Commit Failure', 401: 'Undefined Data Model Element', 402: 'Unimplemented Data Model Element',
+  403: 'Data Model Element Value Not Initialized', 404: 'Data Model Element Is Read Only', 405: 'Data Model Element Is Write Only',
+  406: 'Data Model Element Type Mismatch', 407: 'Data Model Element Value Out Of Range', 408: 'Data Model Dependency Not Established'
+};
+let edition = 4; // SCORM 2004 edition (2, 3 or 4); the 4th edition allows 64,000 characters of suspend_data
+const suspendLimit = () => (edition >= 4 ? 64000 : 4000);
+const COMPLETION = ['completed', 'incomplete', 'not attempted', 'unknown'];
+const SUCCESS = ['passed', 'failed', 'unknown'];
+const EXIT04 = ['time-out', 'suspend', 'logout', 'normal', ''];
+const ITYPES = ['true-false', 'choice', 'fill-in', 'long-fill-in', 'matching', 'performance', 'sequencing', 'likert', 'numeric', 'other'];
+const IRESULT = ['correct', 'incorrect', 'unanticipated', 'neutral'];
+const NAV = /^(continue|previous|exit|exitAll|abandon|abandonAll|suspendAll|_none_)$|^\{target=[^}]+\}(choice|jump)$/;
+const RO04 = new Set(['cmi.completion_threshold', 'cmi.credit', 'cmi.entry', 'cmi.launch_data', 'cmi.learner_id', 'cmi.learner_name',
+  'cmi.max_time_allowed', 'cmi.mode', 'cmi.scaled_passing_score', 'cmi.time_limit_action', 'cmi.total_time']);
+const REAL = /^-?(\d+(\.\d*)?|\.\d+)$/;
+const ISO_DUR = /^P(?=\d|T\d)(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?=\d)(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d{1,2})?)S)?)?$/;
+const ISO_TIME = /^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2}(\.\d{1,2})?)?)?)?)?)?(Z|[+-]\d{2}(:\d{2})?)?$/;
+
+function newRecord04() {
+  return {
+    v: '2004', completion_status: 'not attempted', success_status: 'unknown',
+    score: { scaled: '', raw: '', min: '', max: '' }, progress_measure: '',
+    location: '', suspend_data: '', entry: 'ab-initio', total_cs: 0, launches: 0, attempt: 1,
+    preference: { audio_level: '1', language: '', delivery_speed: '1', audio_captioning: '0' },
+    objectives: [], interactions: [], comments: [], lastAttempt: null, newAttemptNext: false
+  };
+}
+// ISO 8601 durations ("PT1H2M3.5S") ⇄ hundredths of a second
+function isoToCs(v) {
+  const m = ISO_DUR.exec(v); if (!m) return 0;
+  const n = i => +(m[i] || 0);
+  return Math.round(((((n(1) * 365 + n(2) * 30 + n(3)) * 24 + n(4)) * 60 + n(5)) * 60 + parseFloat(m[6] || '0')) * 100);
+}
+function csToIso(cs) {
+  const s = cs / 100, h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.round((s % 60) * 100) / 100;
+  return 'PT' + (h ? h + 'H' : '') + (m ? m + 'M' : '') + sec + 'S';
+}
+function realIn(v, lo, hi) {
+  if (!REAL.test(v)) return 406;
+  if ((lo != null && +v < lo) || (hi != null && +v > hi)) return 407;
+  return 0;
+}
+function overLimit(el, v, limit) {
+  if (v.length > limit) issue('warn', el + ' was set to ' + v.length + ' characters. SCORM 2004 only guarantees ' + limit + '; some LMSs cut off longer values.');
+}
+const scoIndex = () => manifest.scos.indexOf(sco);
+
+// The LMS works out completion/success itself when the manifest sets a threshold or passing score
+function effCompletion(r) {
+  if (sco.completionThreshold === '') return r.completion_status;
+  if (r.progress_measure === '') return 'unknown';
+  return +r.progress_measure >= +sco.completionThreshold ? 'completed' : 'incomplete';
+}
+function effSuccess(r) {
+  if (sco.scaledPassingScore === '') return r.success_status;
+  if (r.score.scaled === '') return 'unknown';
+  return +r.score.scaled >= +sco.scaledPassingScore ? 'passed' : 'failed';
+}
+
+// Error code for a call made at the wrong time (0 = fine)
+function check04(kind) {
+  const [before, after] = { get: [122, 123], set: [132, 133], commit: [142, 143], finish: [112, 113] }[kind];
+  const fn = { get: 'GetValue', set: 'SetValue', commit: 'Commit', finish: 'Terminate' }[kind];
+  if (!session) { issue('error', fn + ' was called while no session was open (for example, after the course was closed).'); return after; }
+  if (session.finished) { issue('error', fn + ' was called after Terminate. Real LMSs reject these calls.'); return after; }
+  if (!session.initialized) { issue('error', fn + ' was called before Initialize.'); return before; }
+  return 0;
+}
+
+function getValue04(el) {
+  const r = rec, s = session;
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const orUnset = v => (v === '' || v == null ? ['', 403] : [String(v), 0]);
+  const fixed = {
+    'cmi._version': '1.0',
+    'cmi.comments_from_learner._children': 'comment,location,timestamp', 'cmi.comments_from_learner._count': String(r.comments.length),
+    'cmi.comments_from_lms._children': 'comment,location,timestamp', 'cmi.comments_from_lms._count': '0',
+    'cmi.completion_status': effCompletion(r), 'cmi.success_status': effSuccess(r),
+    'cmi.credit': 'credit', 'cmi.entry': s.entry, 'cmi.mode': 'normal',
+    'cmi.learner_id': 'learner-001', 'cmi.learner_name': 'Learner, Test',
+    'cmi.learner_preference._children': 'audio_level,language,delivery_speed,audio_captioning',
+    'cmi.learner_preference.audio_level': r.preference.audio_level, 'cmi.learner_preference.language': r.preference.language,
+    'cmi.learner_preference.delivery_speed': r.preference.delivery_speed, 'cmi.learner_preference.audio_captioning': r.preference.audio_captioning,
+    'cmi.objectives._children': 'id,score,success_status,completion_status,progress_measure,description', 'cmi.objectives._count': String(r.objectives.length),
+    'cmi.interactions._children': 'id,type,objectives,timestamp,correct_responses,weighting,learner_response,result,latency,description',
+    'cmi.interactions._count': String(r.interactions.length),
+    'cmi.score._children': 'scaled,raw,min,max',
+    'cmi.time_limit_action': sco.timeLimitAction || 'continue,no message',
+    'cmi.total_time': csToIso(r.total_cs),
+    'adl.nav.request': s.navRequest || '_none_',
+    'adl.nav.request_valid.continue': String(scoIndex() < manifest.scos.length - 1),
+    'adl.nav.request_valid.previous': String(scoIndex() > 0)
+  };
+  if (has(fixed, el)) return [fixed[el], 0];
+  const maybeUnset = {
+    'cmi.completion_threshold': sco.completionThreshold, 'cmi.scaled_passing_score': sco.scaledPassingScore,
+    'cmi.launch_data': sco.launchData, 'cmi.max_time_allowed': sco.maxTime,
+    'cmi.location': r.location, 'cmi.suspend_data': r.suspend_data, 'cmi.progress_measure': r.progress_measure,
+    'cmi.score.scaled': r.score.scaled, 'cmi.score.raw': r.score.raw, 'cmi.score.min': r.score.min, 'cmi.score.max': r.score.max
+  };
+  if (has(maybeUnset, el)) return orUnset(maybeUnset[el]);
+  if (el === 'cmi.exit' || el === 'cmi.session_time') return ['', 405];
+  let m = /^adl\.nav\.request_valid\.(choice|jump)\.\{target=([^}]+)\}$/.exec(el);
+  if (m) return [String(manifest.scos.some(x => x.id === m[2])), 0];
+  m = /^cmi\.objectives\.(\d+)\.(.+)$/.exec(el);
+  if (m) {
+    const o = r.objectives[+m[1]], f = m[2];
+    if (!o) return ['', 301];
+    if (f === 'id') return [o.id, 0];
+    if (f === 'score._children') return ['scaled,raw,min,max', 0];
+    if (f === 'success_status' || f === 'completion_status') return [o[f], 0];
+    if (f === 'progress_measure' || f === 'description') return orUnset(o[f]);
+    const sm = /^score\.(scaled|raw|min|max)$/.exec(f);
+    return sm ? orUnset(o.score[sm[1]]) : ['', 401];
+  }
+  m = /^cmi\.interactions\.(\d+)\.(.+)$/.exec(el);
+  if (m) {
+    const it = r.interactions[+m[1]], f = m[2];
+    if (!it) return ['', 301];
+    if (f === 'id') return [it.id, 0];
+    if (f === 'objectives._count') return [String(it.objectives.length), 0];
+    if (f === 'correct_responses._count') return [String(it.correct_responses.length), 0];
+    let sm = /^objectives\.(\d+)\.id$/.exec(f);
+    if (sm) return it.objectives[+sm[1]] != null ? [it.objectives[+sm[1]], 0] : ['', 301];
+    sm = /^correct_responses\.(\d+)\.pattern$/.exec(f);
+    if (sm) return it.correct_responses[+sm[1]] != null ? [it.correct_responses[+sm[1]], 0] : ['', 301];
+    return /^(type|timestamp|weighting|learner_response|result|latency|description)$/.test(f) ? orUnset(it[f]) : ['', 401];
+  }
+  m = /^cmi\.comments_from_learner\.(\d+)\.(comment|location|timestamp)$/.exec(el);
+  if (m) { const c = r.comments[+m[1]]; return c ? orUnset(c[m[2]]) : ['', 301]; }
+  if (/^cmi\.comments_from_lms\.\d+\./.test(el)) return ['', 301];
+  if (el === '' || /\._(children|count)$/.test(el)) return ['', 301];
+  return ['', 401];
+}
+
+function setValue04(el, v) {
+  const r = rec;
+  let c;
+  if (el === '') return 351;
+  if (el === 'cmi._version' || /\._(children|count)$/.test(el)) return 404;
+  if (RO04.has(el) || /^cmi\.comments_from_lms\./.test(el) || /^adl\.nav\.request_valid\./.test(el)) return 404;
+  switch (el) {
+    case 'cmi.completion_status': if (!COMPLETION.includes(v)) return 406; r.completion_status = v; return 0;
+    case 'cmi.success_status': if (!SUCCESS.includes(v)) return 406; r.success_status = v; return 0;
+    case 'cmi.exit':
+      if (!EXIT04.includes(v)) return 406;
+      if (v === 'logout') issue('warn', 'cmi.exit was set to "logout", which SCORM 2004 deprecates. Use "normal" or "suspend".');
+      session.exit = v; return 0;
+    case 'cmi.location': overLimit(el, v, 1000); r.location = v; return 0;
+    case 'cmi.suspend_data': overLimit(el, v, suspendLimit()); r.suspend_data = v; return 0;
+    case 'cmi.progress_measure': if ((c = realIn(v, 0, 1))) return c; r.progress_measure = v; return 0;
+    case 'cmi.score.scaled': if ((c = realIn(v, -1, 1))) return c; r.score.scaled = v; return 0;
+    case 'cmi.score.raw': case 'cmi.score.min': case 'cmi.score.max':
+      if ((c = realIn(v))) return c; r.score[el.split('.').pop()] = v; return 0;
+    case 'cmi.session_time': if (!ISO_DUR.test(v)) return 406; session.sessionTime = v; return 0;
+    case 'cmi.learner_preference.audio_level': if ((c = realIn(v, 0))) return c; r.preference.audio_level = v; return 0;
+    case 'cmi.learner_preference.delivery_speed': if ((c = realIn(v, 0))) return c; r.preference.delivery_speed = v; return 0;
+    case 'cmi.learner_preference.language': if (!/^([a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*)?$/.test(v)) return 406; r.preference.language = v; return 0;
+    case 'cmi.learner_preference.audio_captioning': if (!['-1', '0', '1'].includes(v)) return 406; r.preference.audio_captioning = v; return 0;
+    case 'adl.nav.request': if (!NAV.test(v)) return 406; session.navRequest = v; return 0;
+  }
+  let m = /^cmi\.objectives\.(\d+)\.(.+)$/.exec(el);
+  if (m) {
+    const i = +m[1], f = m[2];
+    if (i > r.objectives.length) return 351;           // can't skip indexes
+    let o = r.objectives[i];
+    if (f === 'id') {
+      if (!v || v.length > 4000) return 406;
+      if (o) { if (o.id !== v) return 351; return 0; }  // an objective's id can't be changed
+      if (r.objectives.some(x => x.id === v)) return 351;
+      r.objectives[i] = { id: v, score: { scaled: '', raw: '', min: '', max: '' }, success_status: 'unknown', completion_status: 'unknown', progress_measure: '', description: '' };
+      return 0;
+    }
+    if (!o) return 408;                                  // the id must be set first
+    if (f === 'success_status') { if (!SUCCESS.includes(v)) return 406; o.success_status = v; return 0; }
+    if (f === 'completion_status') { if (!COMPLETION.includes(v)) return 406; o.completion_status = v; return 0; }
+    if (f === 'progress_measure') { if ((c = realIn(v, 0, 1))) return c; o.progress_measure = v; return 0; }
+    if (f === 'description') { o.description = v; return 0; }
+    const sm = /^score\.(scaled|raw|min|max)$/.exec(f);
+    if (sm) { if ((c = sm[1] === 'scaled' ? realIn(v, -1, 1) : realIn(v))) return c; o.score[sm[1]] = v; return 0; }
+    return 401;
+  }
+  m = /^cmi\.interactions\.(\d+)\.(.+)$/.exec(el);
+  if (m) {
+    const i = +m[1], f = m[2];
+    if (i > r.interactions.length) return 351;
+    const it = r.interactions[i];
+    if (f === 'id') {
+      if (!v || v.length > 4000) return 406;
+      if (it) it.id = v; else r.interactions[i] = { id: v, objectives: [], correct_responses: [] };
+      return 0;
+    }
+    if (!it) return 408;
+    switch (f) {
+      case 'type': if (!ITYPES.includes(v)) return 406; it.type = v; return 0;
+      case 'timestamp': if (!ISO_TIME.test(v)) return 406; it.timestamp = v; return 0;
+      case 'weighting': if ((c = realIn(v))) return c; it.weighting = v; return 0;
+      case 'latency': if (!ISO_DUR.test(v)) return 406; it.latency = v; return 0;
+      case 'result': if (!IRESULT.includes(v) && !REAL.test(v)) return 406; it.result = v; return 0;
+      case 'description': it.description = v; return 0;
+      case 'learner_response': if (!it.type) return 408; it.learner_response = v; return 0;
+    }
+    let sm = /^objectives\.(\d+)\.id$/.exec(f);
+    if (sm) { const j = +sm[1]; if (j > it.objectives.length) return 351; if (!v) return 406; it.objectives[j] = v; return 0; }
+    sm = /^correct_responses\.(\d+)\.pattern$/.exec(f);
+    if (sm) { if (!it.type) return 408; const j = +sm[1]; if (j > it.correct_responses.length) return 351; it.correct_responses[j] = v; return 0; }
+    return 401;
+  }
+  m = /^cmi\.comments_from_learner\.(\d+)\.(comment|location|timestamp)$/.exec(el);
+  if (m) {
+    const i = +m[1];
+    if (i > r.comments.length) return 351;
+    if (m[2] === 'timestamp' && !ISO_TIME.test(v)) return 406;
+    if (m[2] === 'comment') overLimit(el, v, 4000);
+    (r.comments[i] || (r.comments[i] = { comment: '', location: '', timestamp: '' }))[m[2]] = v;
+    return 0;
+  }
+  return 401;
+}
+
+const API04 = {
+  Initialize(arg = '') {
+    return apiCall('Initialize', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      if (!session) { issue('error', 'Initialize was called while no session was open.'); return ['false', 102]; }
+      if (session.finished) { issue('error', 'Initialize was called again after Terminate in the same launch.'); return ['false', 104]; }
+      if (session.initialized) { issue('warn', 'Initialize was called more than once.'); return ['false', 103]; }
+      session.initialized = true;
+      return ['true', 0];
+    });
+  },
+  Terminate(arg = '') {
+    return apiCall('Terminate', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      const c = check04('finish'); if (c) return ['false', c];
+      finishSession04();
+      return ['true', 0];
+    });
+  },
+  GetValue(el) {
+    return apiCall('GetValue', [el], () => {
+      const c = check04('get'); if (c) return ['', c];
+      return getValue04(String(el == null ? '' : el));
+    });
+  },
+  SetValue(el, val) {
+    return apiCall('SetValue', [el, val], () => {
+      const c = check04('set'); if (c) return ['false', c];
+      const code = setValue04(String(el == null ? '' : el), String(val == null ? '' : val));
+      if (code === 0) session.uncommitted++;
+      return [code ? 'false' : 'true', code];
+    });
+  },
+  Commit(arg = '') {
+    return apiCall('Commit', [arg], () => {
+      if (String(arg) !== '') return ['false', 201];
+      const c = check04('commit'); if (c) return ['false', c];
+      commit();
+      return ['true', 0];
+    });
+  },
+  GetLastError() { return apiCall('GetLastError', [], () => [String(lastErr), 0]); },
+  GetErrorString(code) { return apiCall('GetErrorString', [code], () => [ERRORS04[+code] || '', 0]); },
+  GetDiagnostic(code) { return apiCall('GetDiagnostic', [code], () => [ERRORS04[+(code === '' || code == null ? lastErr : code)] || '', 0]); }
+};
+
+// What a SCORM 2004 LMS does when the course calls Terminate
+function finishSession04() {
+  const s = session;
+  if (s.sessionTime) rec.total_cs += isoToCs(s.sessionTime);
+  else issue('warn', 'The course did not send cmi.session_time, so the LMS records no time for this session.');
+
+  const c = effCompletion(rec), sv = effSuccess(rec);
+  if (c !== rec.completion_status) {
+    note('LMS rule: progress_measure ' + (rec.progress_measure || '(not set)') + ' vs completion_threshold ' + sco.completionThreshold + ', so completion_status is "' + c + '".');
+    rec.completion_status = c;
+  }
+  if (sv !== rec.success_status) {
+    note('LMS rule: score.scaled ' + (rec.score.scaled || '(not set)') + ' vs scaled_passing_score ' + sco.scaledPassingScore + ', so success_status is "' + sv + '".');
+    rec.success_status = sv;
+  }
+  if (rec.completion_status === 'not attempted' || rec.completion_status === 'unknown')
+    issue('warn', 'The course never reported cmi.completion_status, so the LMS can’t tell whether it was completed.');
+
+  const nav = s.navRequest || '_none_';
+  const suspended = s.exit === 'suspend' || nav === 'suspendAll';
+  if (suspended) {
+    rec.entry = 'resume';
+  } else {
+    if (rec.completion_status !== 'completed')
+      issue('warn', 'The course ended incomplete without setting cmi.exit to "suspend". In SCORM 2004 that ends the attempt, so the next launch starts over and saved progress is discarded.');
+    rec.lastAttempt = { attempt: rec.attempt, completion: rec.completion_status, success: rec.success_status,
+      score: rec.score.scaled !== '' ? rec.score.scaled : rec.score.raw, exit: s.exit || '(blank)' };
+    rec.newAttemptNext = true;
+  }
+  s.finished = true;
+  commit();
+  note('Session finished. completion "' + rec.completion_status + '", success "' + rec.success_status + '", total time ' + csToIso(rec.total_cs) + '. ' +
+    (suspended ? 'Suspended, so the next launch resumes.' : 'Attempt ended (exit "' + (s.exit || '(blank)') + '"), so the next launch starts a new attempt.'));
+  if (nav !== '_none_') setTimeout(() => handleNav(nav), 0);
+}
+
+// adl.nav.request: move between items, or close the course
+function selectSco(target) {
+  sco = target; rec = null; saved = null;
+  $('scoSel').value = String(manifest.scos.indexOf(target));
+}
+function handleNav(nav) {
+  const i = scoIndex();
+  const m = /^\{target=([^}]+)\}(choice|jump)$/.exec(nav);
+  if (nav === 'continue' || nav === 'previous' || m) {
+    const target = m ? manifest.scos.find(x => x.id === m[1]) : manifest.scos[nav === 'continue' ? i + 1 : i - 1];
+    if (!target) { issue('warn', 'The course asked the LMS to navigate ("' + nav + '"), but there is no such item.'); return; }
+    note('Navigation request "' + nav + '": opening "' + target.title + '".');
+    endSession(() => { selectSco(target); launch(); });
+  } else {
+    note('Navigation request "' + nav + '": the LMS closes the course.');
+    endSession();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  Launch / end session
 // ════════════════════════════════════════════════════════════════════════════
 function launch() {
   if (!sco) return;
+  if (scormVer === 'xapi') return launchXapi();
   endSession(() => {
     saved = loadSaved();
+    let newAttempt = false;
+    if (scormVer === '2004' && saved.newAttemptNext) {
+      // The previous attempt ended without "suspend": start fresh, keeping only learner-level data
+      saved = Object.assign(newRecord04(), { launches: saved.launches, attempt: saved.attempt + 1, lastAttempt: saved.lastAttempt, preference: saved.preference });
+      newAttempt = true;
+    }
     saved.launches++;
     persist();
     rec = clone(saved);
-    session = { initialized: false, finished: false, exit: '', sessionTime: '', uncommitted: 0, commits: 0, entry: rec.entry };
+    session = { initialized: false, finished: false, exit: '', sessionTime: '', navRequest: '', uncommitted: 0, commits: 0, entry: rec.entry };
     launchT0 = Date.now();
-    note('Launch #' + saved.launches + ': ' + sco.href + '  (entry "' + (rec.entry || '(blank)') + '")');
+    note('Launch #' + saved.launches + (scormVer === '2004' ? ', attempt ' + saved.attempt + (newAttempt ? ' (new)' : '') : '') +
+      ': ' + sco.href + '  (entry "' + (rec.entry || '(blank)') + '")');
     $('empty').hidden = true;
     frame.src = sco.url;
     $('btnLaunch').textContent = 'Relaunch';
@@ -477,9 +856,27 @@ function endSession(then) {
   frame.addEventListener('load', function onBlank() {
     frame.removeEventListener('load', onBlank);
     const s = session;
-    if (!s.initialized) issue('error', 'The course never called LMSInitialize. It probably did not find the SCORM 1.2 API (window.API).');
+    // Courses like Storyline take a few seconds to load; a quick relaunch isn't evidence the course is broken
+    const secs = (Date.now() - launchT0) / 1000;
+    const tooQuick = secs < 8;
+    if (s.xapi) {
+      if (!s.requests) {
+        if (tooQuick) note('Closed after ' + secs.toFixed(1) + ' s, before the course had contacted the LRS.');
+        else issue('error', 'The course never contacted the LRS. It may not be reading the endpoint, auth and actor values from its launch URL.');
+      }
+      note('Session ended. ' + s.requests + ' LRS request(s), ' + s.statements + ' statement(s).');
+      session = null;
+      $('btnEnd').disabled = true;
+      scheduleSummary();
+      if (then) then();
+      return;
+    }
+    if (!s.initialized && tooQuick) note('Closed after ' + secs.toFixed(1) + ' s, before the course had connected to the LMS.');
+    else if (!s.initialized) issue('error', scormVer === '2004'
+      ? 'The course never called Initialize. It probably did not find the SCORM 2004 API (window.API_1484_11). It may be a SCORM 1.2 course packaged with a 2004 manifest.'
+      : 'The course never called LMSInitialize. It probably did not find the SCORM 1.2 API (window.API). It may be a SCORM 2004 course packaged with a 1.2 manifest.');
     else if (!s.finished) {
-      issue('warn', 'The course was closed without calling LMSFinish.');
+      issue('warn', 'The course was closed without calling ' + fnName('finish') + '.');
       if (s.uncommitted) issue('error', s.uncommitted + ' value(s) were set but never committed before the course closed. A real LMS may lose them.');
     }
     note('Session ended.');
@@ -527,19 +924,41 @@ async function readManifest(base) {
     let href = /^https?:/i.test(r.href) ? r.href : prefix + r.base + r.href;
     const params = it.getAttribute('parameters') || '';
     if (params) href += params.startsWith('#') ? params : (href.includes('?') ? '&' : '?') + params.replace(/^[?&]/, '');
+    // SCORM 2004: completion threshold (adlcp:completionThreshold) and passing score (imsss primary objective)
+    let completionThreshold = '';
+    const ct = Array.from(it.children).find(x => x.localName.toLowerCase() === 'completionthreshold');
+    if (ct) {
+      if (ct.hasAttribute('completedByMeasure') || ct.hasAttribute('minProgressMeasure')) {
+        if (ct.getAttribute('completedByMeasure') === 'true') completionThreshold = ct.getAttribute('minProgressMeasure') || '1.0';
+      } else if (REAL.test(ct.textContent.trim())) completionThreshold = ct.textContent.trim();
+    }
+    let scaledPassingScore = '', seqMaxTime = '';
+    const seq = Array.from(it.children).find(x => x.localName === 'sequencing');
+    if (seq) {
+      const po = seq.getElementsByTagNameNS('*', 'primaryObjective')[0];
+      if (po && po.getAttribute('satisfiedByMeasure') === 'true') {
+        const mm = po.getElementsByTagNameNS('*', 'minNormalizedMeasure')[0];
+        scaledPassingScore = mm ? mm.textContent.trim() : '1.0';
+      }
+      const lc = seq.getElementsByTagNameNS('*', 'limitConditions')[0];
+      if (lc) seqMaxTime = lc.getAttribute('attemptAbsoluteDurationLimit') || '';
+    }
     scos.push({
       id: it.getAttribute('identifier') || it.getAttribute('identifierref'),
       title: childText(it, 'title') || it.getAttribute('identifierref'),
       href, url: /^https?:/i.test(href) ? href : base + href, type: r.type,
       masteryScore: childText(it, 'masteryscore'), launchData: childText(it, 'datafromlms'),
-      maxTime: childText(it, 'maxtimeallowed'), timeLimitAction: childText(it, 'timelimitaction')
+      maxTime: childText(it, 'maxtimeallowed') || seqMaxTime, timeLimitAction: childText(it, 'timelimitaction'),
+      completionThreshold, scaledPassingScore
     });
   });
+  const is2004 = /2004|cam 1\.3/i.test(schemaVersion) || Array.from(root.attributes).some(a => a.value.includes('adlcp_v1p3'));
   return {
     identifier: root.getAttribute('identifier') || '',
     title: org ? childText(org, 'title') : '',
     schemaVersion,
-    is2004: /2004|cam 1\.3/i.test(schemaVersion) || Array.from(root.attributes).some(a => a.value.includes('adlcp_v1p3')),
+    is2004,
+    edition: /4th/i.test(schemaVersion) ? 4 : /3rd/i.test(schemaVersion) ? 3 : /cam 1\.3|2nd/i.test(schemaVersion) ? 2 : 3,
     scos
   };
 }
@@ -565,10 +984,31 @@ async function openCurrentPackage() {
   if (!info.id) { if (info.error) showBanner('Could not load the package: ' + info.error, true); return; }
   pkg = info;
   const base = '/pkg/' + pkg.id + '/';
+  if (info.kind === 'xapi') return openXapiPackage(base);
   try { manifest = await readManifest(base); }
   catch (e) { showBanner(e.message, true); return; }
   if (!manifest.scos.length) { showBanner('imsmanifest.xml has no launchable items.', true); return; }
-  showBanner(manifest.is2004 ? 'This looks like a SCORM 2004 package (schema version "' + manifest.schemaVersion + '"). This test LMS only provides the SCORM 1.2 API, so the course will probably say it cannot find the LMS.' : '', false);
+  showBanner('', false);
+  $('logTitle').textContent = 'LMS calls';
+  $('statusSel').title = '';
+  // Offer only the API that matches the package, as a real LMS does
+  scormVer = manifest.is2004 ? '2004' : '1.2';
+  edition = manifest.edition;
+  delete window.API; delete window.API_1484_11;
+  if (scormVer === '2004') window.API_1484_11 = API04; else window.API = API12;
+  const verText = scormVer === '2004' ? 'SCORM 2004 · ' + ({ 2: '2nd', 3: '3rd', 4: '4th' })[edition] + ' edition' : 'SCORM 1.2';
+  $('verLabel').textContent = verText;
+  $('pkgInfo').innerHTML = '<div class="verbadge" id="verBadge">' + esc(verText) + '</div>' +
+    '<table class="rec">' +
+    '<tr><th>Manifest says</th><td>' + (manifest.schemaVersion ? esc(manifest.schemaVersion) : '<span class="v-muted">(no schema version; treated as SCORM 1.2)</span>') + '</td></tr>' +
+    '<tr><th>LMS connection</th><td>' + (scormVer === '2004' ? 'window.API_1484_11' : 'window.API') + '</td></tr>' +
+    '<tr><th>Course items</th><td>' + manifest.scos.length + '</td></tr></table>';
+  const strictLbl = $('strictLbl');
+  strictLbl.style.opacity = scormVer === '2004' ? '.5' : '';
+  $('strict').disabled = scormVer === '2004';
+  strictLbl.title = scormVer === '2004'
+    ? 'Always on for SCORM 2004: the standard says that leaving without cmi.exit = "suspend" ends the attempt, so the next launch starts fresh.'
+    : 'Like many LMSs: if the course exits without cmi.core.exit = "suspend", the next launch starts a fresh attempt and saved progress is discarded.';
   $('pkgName').textContent = (manifest.title || pkg.name) + '  ·  ' + pkg.name;
   document.title = 'SCORM Test LMS · ' + (manifest.title || pkg.name);
   const sel = $('scoSel');
@@ -577,8 +1017,240 @@ async function openCurrentPackage() {
   sel.hidden = manifest.scos.length < 2;
   sco = manifest.scos[0];
   issues.clear(); renderIssues();
-  ['btnLaunch', 'btnReset', 'statusSel'].forEach(id => $(id).disabled = false);
+  ['btnLaunch', 'btnReset', 'statusSel', 'btnClose'].forEach(id => $(id).disabled = false);
+  refreshStoryline();
   launch();
+}
+
+// ── Storyline packages: switch the menu navigation between "free" and "restricted" ──
+// The server swaps the value as it serves frame.js and frame.xml; the package files aren't changed.
+async function refreshStoryline() {
+  let info = null;
+  try { info = await (await fetch('/api/storyline')).json(); } catch {}
+  const box = $('slBox');
+  if (!info || !info.storyline) { box.hidden = true; return; }
+  box.hidden = false;
+  const packaged = info.files.js || info.files.xml || '';
+  $('slFree').checked = (info.override || packaged) === 'free';
+  $('slNote').innerHTML = ['js', 'xml'].map(k => {
+    const v = info.files[k];
+    const state = v === null ? 'not in this package' : v === '' ? 'no flow setting found' :
+      '"' + v + '"' + (info.override && info.override !== v ? ' → served as "' + info.override + '"' : '');
+    return esc(info.paths[k] + ': ' + state);
+  }).join('<br/>');
+
+  // Seekbar: frame.js "controls" readonly / readonlyOnce, plus any slide trigger that disables it
+  const sb = info.seekbar || {}, nav = info.nav || { slideFiles: 0, navLocks: 0, seekLocks: 0 };
+  const seekLocked = sb.readonly === true || nav.seekLocks > 0;
+  $('slSeek').checked = !!info.seekbarUnlocked;
+  $('slSeek').disabled = !seekLocked && !info.seekbarUnlocked;
+  $('slSeekNote').textContent = sb.readonly === null && !nav.seekLocks ? 'No seekbar setting found in frame.js.' :
+    (sb.readonly ? (sb.readonlyOnce ? 'Seekbar is read-only until a slide has been viewed once' : 'Seekbar is read-only') : 'Seekbar is already draggable') +
+    (nav.seekLocks ? '; ' + nav.seekLocks + ' trigger(s) disable it' : '') +
+    (info.seekbarUnlocked && seekLocked ? ' → served as draggable.' : '.');
+
+  // Next/Prev: slide triggers that disable the buttons (enable_window_control ... "enable":false)
+  $('slNav').checked = !!info.navUnlocked;
+  $('slNav').disabled = !nav.navLocks && !info.navUnlocked;
+  $('slNavNote').textContent = nav.navLocks
+    ? nav.navLocks + ' trigger(s) in ' + nav.lockedFiles + ' slide(s) disable Next/Prev' +
+      (info.navUnlocked ? ' → kept enabled. Slides whose Next has no destination still won’t move on.' : '.')
+    : 'No triggers that disable Next/Prev were found.';
+}
+
+// Send one setting to the server, then relaunch so the Storyline player re-reads its files
+async function setStoryline(param, value, box, label) {
+  let ok = false;
+  try { ok = (await fetch('/api/storyline?' + param + '=' + value, { method: 'POST' })).ok; } catch {}
+  if (!ok) {
+    box.checked = !box.checked;
+    showBanner('Couldn’t change the Storyline setting. If the test LMS was started before this feature was added, restart it (Ctrl+C, then run it again).', true);
+    return;
+  }
+  await refreshStoryline();
+  note(label + '. Relaunching so the player reads it.');
+  launch();
+}
+$('slFree').addEventListener('change', e => {
+  const flow = e.target.checked ? 'free' : 'restricted';
+  setStoryline('flow', flow, e.target, 'Storyline navigation set to "' + flow + '"');
+});
+$('slSeek').addEventListener('change', e =>
+  setStoryline('seekbar', e.target.checked ? 'unlocked' : 'packaged', e.target, e.target.checked ? 'Storyline seekbar unlocked' : 'Storyline seekbar back to the package’s setting'));
+$('slNav').addEventListener('change', e =>
+  setStoryline('nav', e.target.checked ? 'unlocked' : 'packaged', e.target, e.target.checked ? 'Storyline Next/Prev unlocked' : 'Storyline Next/Prev back to the package’s triggers'));
+
+// Back to the start screen with nothing loaded (learner records stay saved in this browser)
+function resetToEmpty() {
+  pkg = null; manifest = null; sco = null; saved = null; rec = null; session = null; launchT0 = 0;
+  xapiLaunch = null; xapiSum = null;
+  $('logTitle').textContent = 'LMS calls';
+  delete window.API; delete window.API_1484_11;
+  scormVer = '1.2';
+  frame.src = 'about:blank';
+  $('empty').hidden = false;
+  $('pkgName').textContent = 'No package loaded';
+  document.title = 'SCORM Test LMS';
+  const sel = $('scoSel'); sel.innerHTML = ''; sel.hidden = true;
+  $('verLabel').textContent = 'SCORM 1.2 · 2004 · xAPI';
+  $('pkgInfo').innerHTML = '<span class="v-muted">No package loaded.</span>';
+  $('slBox').hidden = true;
+  $('btnLaunch').textContent = 'Launch';
+  ['btnLaunch', 'btnEnd', 'btnReset', 'statusSel', 'btnClose'].forEach(id => $(id).disabled = true);
+  $('strict').disabled = false; $('strictLbl').style.opacity = '';
+  issues.clear(); renderIssues();
+  showBanner('', false);
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  xAPI (Tin Can) packages: the course talks to the LRS built into the server
+// ════════════════════════════════════════════════════════════════════════════
+let xapiLaunch = null;  // { endpoint, auth, actor, registration, activityId } for the current launch
+let xapiSum = null;     // learner record worked out by the LRS from the statements
+
+async function readTincan(base) {
+  const res = await fetch(base + 'tincan.xml');
+  if (!res.ok) throw new Error('Could not read tincan.xml');
+  const doc = new DOMParser().parseFromString(await res.text(), 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('tincan.xml is not valid XML.');
+  const acts = Array.from(doc.getElementsByTagNameNS('*', 'activity'));
+  const child = (el, name) => Array.from(el.children).find(x => x.localName === name);
+  const text = (el, name) => { const c = child(el, name); return c ? c.textContent.trim() : ''; };
+  const scos = acts.filter(a => child(a, 'launch')).map(a => {
+    const href = text(a, 'launch');
+    return { id: a.getAttribute('id') || '', title: text(a, 'name') || a.getAttribute('id') || href, href,
+      url: /^https?:/i.test(href) ? href : base + href, type: a.getAttribute('type') || '' };
+  });
+  const course = acts.find(a => /course/i.test(a.getAttribute('type') || '')) || acts[0];
+  return { identifier: course ? course.getAttribute('id') || '' : '', title: course ? text(course, 'name') : '', xapi: true, scos };
+}
+
+async function openXapiPackage(base) {
+  try { manifest = await readTincan(base); }
+  catch (e) { showBanner(e.message, true); return; }
+  if (!manifest.scos.length) { showBanner('tincan.xml has no activity with a <launch> file.', true); return; }
+  showBanner('', false);
+  scormVer = 'xapi';
+  delete window.API; delete window.API_1484_11;
+  $('verLabel').textContent = 'xAPI (Tin Can)';
+  $('logTitle').textContent = 'LRS requests';
+  $('pkgName').textContent = (manifest.title || pkg.name) + '  ·  ' + pkg.name;
+  document.title = 'SCORM Test LMS · ' + (manifest.title || pkg.name);
+  const sel = $('scoSel');
+  sel.innerHTML = '';
+  manifest.scos.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.title; sel.appendChild(o); });
+  sel.hidden = manifest.scos.length < 2;
+  sco = manifest.scos[0];
+  issues.clear(); renderIssues();
+  manifest.scos.forEach(s => {
+    if (!/^[a-z][a-z0-9+.-]*:\S+$/i.test(s.id)) issue('warn', 'Activity "' + s.title + '" in tincan.xml has the id "' + s.id + '", which isn’t a full IRI. LRSs reject statements about it.');
+  });
+  ['btnLaunch', 'btnReset', 'btnClose'].forEach(id => $(id).disabled = false);
+  $('statusSel').disabled = true;
+  $('statusSel').title = 'Not available for xAPI: the learner’s status comes from the statements the course sends.';
+  $('strict').disabled = true; $('strictLbl').style.opacity = '.5';
+  $('strictLbl').title = 'SCORM only.';
+  renderXapiPanel();
+  refreshStoryline();
+  launch();
+}
+
+function renderXapiPanel() {
+  const L = xapiLaunch;
+  $('pkgInfo').innerHTML = '<div class="verbadge" id="verBadge">xAPI (Tin Can)</div><table class="rec">' +
+    '<tr><th>Package file</th><td>tincan.xml</td></tr>' +
+    '<tr><th>LRS endpoint</th><td>' + (L ? esc(L.endpoint) : '<span class="v-muted">(on launch)</span>') + '</td></tr>' +
+    '<tr><th>Learner</th><td>' + (L ? esc(L.actor.name + ' <' + L.actor.mbox.replace(/^mailto:/, '') + '>') : '<span class="v-muted">(on launch)</span>') + '</td></tr>' +
+    '<tr><th>Registration</th><td>' + (L ? esc(L.registration) : '<span class="v-muted">(on launch)</span>') + '</td></tr>' +
+    '<tr><th>Activities</th><td>' + manifest.scos.length + '</td></tr></table>';
+}
+
+function launchXapi() {
+  endSession(async () => {
+    let p;
+    try { p = await (await fetch('/api/xapi/launch?activityId=' + encodeURIComponent(sco.id))).json(); }
+    catch { showBanner(NO_SERVER, true); return; }
+    if (!p || !p.endpoint) {
+      showBanner('The test LMS server doesn’t have the built-in LRS. If it was started before xAPI support was added, restart it (Ctrl+C, then run it again).', true);
+      return;
+    }
+    xapiLaunch = p;
+    renderXapiPanel();
+    // Standard "Tin Can launch" parameters, as Articulate, Captivate, iSpring and others expect
+    const qs = 'endpoint=' + encodeURIComponent(p.endpoint) + '&auth=' + encodeURIComponent(p.auth) +
+      '&actor=' + encodeURIComponent(JSON.stringify(p.actor)) + '&registration=' + encodeURIComponent(p.registration) +
+      '&activity_id=' + encodeURIComponent(p.activityId);
+    session = { xapi: true, requests: 0, statements: 0, errors: 0 };
+    launchT0 = Date.now();
+    note('Launch: ' + sco.href + '  (registration ' + p.registration + ')');
+    $('empty').hidden = true;
+    frame.src = sco.url + (sco.url.includes('?') ? '&' : '?') + qs;
+    $('btnLaunch').textContent = 'Relaunch';
+    $('btnEnd').disabled = false;
+    scheduleSummary();
+  });
+}
+
+let summaryTimer = 0;
+function scheduleSummary() {
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(async () => {
+    if (scormVer !== 'xapi' || !xapiLaunch) return;
+    try { xapiSum = await (await fetch('/api/xapi/summary?registration=' + encodeURIComponent(xapiLaunch.registration))).json(); } catch {}
+    scheduleRender();
+  }, 250);
+}
+
+// Live feed of every request the course makes to the LRS
+function onXapiEvent(ev) {
+  if (scormVer !== 'xapi') return;
+  if (session && session.xapi) {
+    session.requests++;
+    session.statements += (ev.statements || []).length;
+    if (ev.status >= 400 && ev.status !== 404) session.errors++;
+  }
+  const q = ev.query || {};
+  const detail = q.stateId ? ' stateId=' + q.stateId : q.profileId ? ' profileId=' + q.profileId : q.statementId ? ' statementId=' + q.statementId : '';
+  let html = '<span class="fn">' + esc(ev.method) + ' /' + esc(ev.resource) + '</span>' + esc(detail) + ' <span class="ret">→ ' + ev.status + '</span>';
+  if (ev.summary) html += ' <span class="ret">' + esc(ev.summary) + '</span>';
+  if (ev.statements && ev.statements.length) html += '<br/>' + ev.statements.map(s => '• ' + esc(s)).join('<br/>');
+  if (ev.status >= 400 && ev.error) html += '<br/>' + esc(ev.error);
+  const expected404 = ev.status === 404 && ev.method === 'GET' && /^(activities\/state|activities\/profile|agents\/profile)$/.test(ev.resource);
+  logRow(ev.status >= 400 && !expected404 ? 'err' : '', html, false);
+  (ev.issues || []).forEach(([level, msg]) => issue(level, msg));
+  scheduleSummary();
+}
+if (location.protocol !== 'file:' && window.EventSource) {
+  const es = new EventSource('/api/xapi/events');
+  es.onmessage = e => { try { onXapiEvent(JSON.parse(e.data)); } catch {} };
+}
+
+function renderXapi(add, group, blank) {
+  const sm = xapiSum;
+  const none = '<span class="v-muted">(none)</span>';
+  group('Learner record (from the LRS)');
+  if (!sm) { add('status', '<span class="v-muted">loading…</span>'); }
+  else {
+    add('completion', esc(sm.completion), sm.completion === 'completed' ? 'v-ok' : '');
+    add('success', esc(sm.success), sm.success === 'passed' ? 'v-ok' : sm.success === 'unknown' ? 'v-muted' : '');
+    const sc = sm.score;
+    add('score', !sc ? none : esc((sc.scaled != null ? 'scaled ' + sc.scaled : '') + (sc.raw != null ? (sc.scaled != null ? ', ' : '') + 'raw ' + sc.raw +
+      (sc.min != null || sc.max != null ? ' (min ' + (sc.min != null ? sc.min : '–') + ', max ' + (sc.max != null ? sc.max : '–') + ')' : '') : '')));
+    add('duration', sm.duration ? esc(sm.duration) : none);
+    add('statements', String(sm.statements) + (sm.lastVerb ? ' <span class="v-muted">(last: ' + esc(sm.lastVerb) + ')</span>' : ''));
+    if (sm.recent && sm.recent.length) add('recent', '<details><summary>last ' + sm.recent.length + '</summary><pre>' + sm.recent.map(esc).join('\n') + '</pre></details>');
+    add('saved state', sm.state.length ? sm.state.map(d => esc(d.stateId) + ' <span class="v-muted">(' + d.bytes + ' bytes)</span>').join('<br/>') : none);
+  }
+  group('This session');
+  if (session && session.xapi) {
+    add('state', '<span class="v-ok">running</span>');
+    add('LRS requests', String(session.requests));
+    add('statements sent', String(session.statements));
+    add('rejected', session.errors ? '<span style="color:var(--err)">' + session.errors + '</span>' : '0');
+  } else {
+    add('state', '<span class="v-muted">not running</span>');
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -590,11 +1262,13 @@ function render() {
   renderQueued = false;
   const tbl = $('recTbl');
   if (!sco) { tbl.innerHTML = '<tr><td class="v-muted">No package loaded.</td></tr>'; return; }
-  const r = rec || loadSaved();
   const rows = [];
   const add = (k, v, cls) => rows.push('<tr><th>' + k + '</th><td class="' + (cls || '') + '">' + v + '</td></tr>');
   const group = t => rows.push('<tr class="group"><th colspan="2">' + t + '</th></tr>');
   const blank = v => v === '' ? '<span class="v-muted">(blank)</span>' : esc(v);
+  if (scormVer === 'xapi') { renderXapi(add, group, blank); tbl.innerHTML = rows.join(''); return; }
+  const r = rec || loadSaved();
+  if (r.v === '2004') { render04(r, add, group, blank); tbl.innerHTML = rows.join(''); return; }
   group('Learner record (as the course sees it)');
   add('lesson_status', esc(r.lesson_status), ['passed', 'completed'].includes(r.lesson_status) ? 'v-ok' : '');
   add('score', r.score_raw === '' ? '<span class="v-muted">(none)</span>' : esc(r.score_raw) + ' <span class="v-muted">(min ' + (esc(r.score_min) || '–') + ', max ' + (esc(r.score_max) || '–') + ')</span>');
@@ -620,6 +1294,45 @@ function render() {
   add('launches', String((saved || r).launches));
   tbl.innerHTML = rows.join('');
 }
+function render04(r, add, group, blank) {
+  const none = '<span class="v-muted">(none)</span>';
+  const comp = effCompletion(r), succ = effSuccess(r);
+  group('Learner record — attempt ' + r.attempt);
+  add('completion_status', esc(comp), comp === 'completed' ? 'v-ok' : '');
+  add('success_status', esc(succ), succ === 'passed' ? 'v-ok' : succ === 'failed' ? '' : 'v-muted');
+  const sc = r.score;
+  add('score', sc.scaled === '' && sc.raw === '' ? none :
+    (sc.scaled !== '' ? 'scaled ' + esc(sc.scaled) : '') + (sc.raw !== '' ? (sc.scaled !== '' ? ', ' : '') + 'raw ' + esc(sc.raw) +
+      ' <span class="v-muted">(min ' + (esc(sc.min) || '–') + ', max ' + (esc(sc.max) || '–') + ')</span>' : ''));
+  if (r.progress_measure !== '') add('progress_measure', esc(r.progress_measure));
+  add('location', blank(r.location));
+  add('suspend_data', r.suspend_data === '' ? '<span class="v-muted">(blank)</span>' :
+    '<details><summary>' + r.suspend_data.length + ' / ' + suspendLimit() + ' chars</summary><pre>' + esc(r.suspend_data) + '</pre></details>');
+  add('total_time', esc(csToIso(r.total_cs)));
+  if (r.objectives.length) add('objectives', String(r.objectives.length));
+  if (r.interactions.length) add('interactions', String(r.interactions.length));
+  if (r.comments.length) add('comments', String(r.comments.length));
+  if (sco.completionThreshold) add('completion_threshold', esc(sco.completionThreshold));
+  if (sco.scaledPassingScore) add('scaled_passing_score', esc(sco.scaledPassingScore));
+  if (r.lastAttempt) {
+    const la = r.lastAttempt;
+    add('previous attempt', esc('#' + la.attempt + ': ' + la.completion + ' · ' + la.success + (la.score !== '' ? ' · score ' + la.score : '')));
+  }
+  group('This session');
+  if (session) {
+    add('state', session.finished ? 'terminated' : session.initialized ? '<span class="v-ok">initialized</span>' : 'waiting for Initialize');
+    add('entry', blank(session.entry));
+    add('exit', blank(session.exit));
+    add('session_time', blank(session.sessionTime));
+    if (session.navRequest) add('adl.nav.request', esc(session.navRequest));
+    add('commits', String(session.commits));
+    add('uncommitted', session.uncommitted ? '<span style="color:var(--warn)">' + session.uncommitted + ' change(s)</span>' : '0');
+  } else {
+    add('state', '<span class="v-muted">not running</span>');
+    add('next launch', r.newAttemptNext ? 'new attempt' : esc(r.entry === 'resume' ? 'resume' : r.entry || '(blank)'));
+  }
+  add('launches', String((saved || r).launches));
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Controls
@@ -630,6 +1343,17 @@ $('scoSel').addEventListener('change', e => { endSession(() => { sco = manifest.
 
 $('btnReset').addEventListener('click', () => {
   if (!confirm('Erase this learner\'s saved record for this course (status, score, progress, time) and relaunch?')) return;
+  if (scormVer === 'xapi') {
+    // xAPI statements can't be deleted from an LRS; a new registration starts the learner over
+    endSession(async () => {
+      try { await fetch('/api/xapi/reset?activityId=' + encodeURIComponent(sco.id), { method: 'POST' }); }
+      catch { showBanner(NO_SERVER, true); return; }
+      issues.clear(); renderIssues();
+      note('Learner reset: new registration, saved state cleared. Earlier statements stay in the LRS under the old registration.');
+      launch();
+    });
+    return;
+  }
   endSession(() => {
     try { localStorage.removeItem(recordKey()); } catch {}
     rec = null; saved = null;
@@ -645,8 +1369,16 @@ $('statusSel').addEventListener('change', e => {
   // Close the course first so its own exit handling can't overwrite the status we set
   endSession(() => {
     saved = loadSaved();
-    saved.lesson_status = v;
-    if (v === 'not attempted') saved.entry = 'ab-initio';
+    if (scormVer === '2004') {
+      const map = { 'not attempted': ['not attempted', 'unknown'], incomplete: ['incomplete', 'unknown'],
+        completed: ['completed', 'unknown'], passed: ['completed', 'passed'], failed: ['completed', 'failed'] };
+      [saved.completion_status, saved.success_status] = map[v];
+      saved.newAttemptNext = false;
+      if (v === 'not attempted') saved.entry = 'ab-initio';
+    } else {
+      saved.lesson_status = v;
+      if (v === 'not attempted') saved.entry = 'ab-initio';
+    }
     persist();
     rec = null;
     note('Learner status set to "' + v + '" by the tester.');
@@ -692,6 +1424,15 @@ async function upload(file) {
   if (session) endSession(doUpload); else await doUpload();
 }
 $('btnOpen').addEventListener('click', () => $('fileIn').click());
+$('btnClose').addEventListener('click', () => {
+  endSession(async () => {
+    let res;
+    try { res = await fetch('/api/close', { method: 'POST' }); } catch { showBanner(NO_SERVER, true); return; }
+    if (!res.ok) { showBanner('The test LMS server couldn’t close the package. If it was started before this feature was added, restart it (Ctrl+C, then run it again).', true); return; }
+    note('Package closed.');
+    resetToEmpty();
+  });
+});
 $('fileIn').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); });
 
 let dragDepth = 0;
@@ -701,6 +1442,24 @@ document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', e => {
   e.preventDefault(); dragDepth = 0; $('dropOverlay').hidden = true;
   const f = e.dataTransfer.files[0]; if (f) upload(f);
+});
+
+// ── Collapsible sections in the right panel (remembered in this browser) ──
+const COLLAPSE_KEY = 'scormlms:collapsed';
+let collapsedSecs = [];
+try { collapsedSecs = JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || []; } catch {}
+function setCollapsed(id, on) {
+  const sec = $(id);
+  sec.classList.toggle('collapsed', on);
+  sec.querySelector('.sec-toggle').setAttribute('aria-expanded', String(!on));
+  collapsedSecs = collapsedSecs.filter(x => x !== id);
+  if (on) collapsedSecs.push(id);
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSecs)); } catch {}
+}
+document.querySelectorAll('.sec-toggle').forEach(btn => {
+  const id = btn.dataset.sec;
+  btn.addEventListener('click', () => setCollapsed(id, !$(id).classList.contains('collapsed')));
+  if (collapsedSecs.includes(id)) setCollapsed(id, true);
 });
 
 render();

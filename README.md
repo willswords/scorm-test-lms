@@ -21,7 +21,7 @@ Open a Terminal and type:
 node scorm-test-lms.js
 ```
 
-or if that doesn't work, specific the exact location of the file you downloaded:
+or if that doesn't work, specify the exact location of the file you downloaded:
 
 ```
 node "C:\Users\yourusername\pathtothefile\...\scorm-test-lms.js"

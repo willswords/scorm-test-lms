@@ -15,8 +15,16 @@ The header and the **Package** panel show which kind of package is loaded.
 
 ## Running it
 
+Open a Terminal and type:
+
 ```
 node scorm-test-lms.js
+```
+
+or if that doesn't work, specific the exact location of the file you downloaded:
+
+```
+node "C:\Users\yourusername\pathtothefile\...\scorm-test-lms.js"
 ```
 
 Your browser opens the test LMS. Drop a SCORM `.zip` onto the page, or click **Open package…**.

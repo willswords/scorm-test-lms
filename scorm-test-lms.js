@@ -482,6 +482,77 @@ function applyAnswers(text, applies) {
   }
   return n ? writeProvided(p.kind, p.data) : text;
 }
+// ── Completion criteria set by the authoring tool (the page reads the manifest's own rules) ──
+//   Articulate Storyline: "scorings" in html5/data/js/data.js, one per tracking option (quiz result, slides viewed)
+//   SCORM Video Packager: config.xml <player-config>, or the settings built into its index.html
+function completionCriteria() {
+  if (!current) return null;
+  if (current.criteria !== undefined) return current.criteria;
+  const read = rel => { try { return fs.readFileSync(path.join(current.root, rel), 'utf8'); } catch { return null; } };
+  let out = null;
+  try {
+    const dataJs = read(DATA_JS);
+    const d = dataJs && readProvided(dataJs);
+    if (d && d.kind === 'data') out = storylineCriteria(d.data);
+    else {
+      const cfg = read('config.xml');
+      const tag = name => { const m = cfg && new RegExp('<' + name + '(?:\\s[^>]*)?>([^<]*)</' + name + '>').exec(cfg); return m ? m[1].trim() : null; };
+      if (cfg && /<player-config[\s>]/.test(cfg)) {
+        const ack = /<acknowledgment[^>]*\benabled="true"/.test(cfg);
+        out = videoPackagerCriteria(parseFloat(tag('threshold')), tag('allow-self-complete') === 'true', ack, 'config.xml');
+      } else {
+        const idx = read('index.html') || '';
+        const m = /const CFG=\{\s*threshold:([\d.]+),\s*allowSelfComplete:(true|false),\s*enableAck:(true|false)/.exec(idx);
+        if (m) out = videoPackagerCriteria(parseFloat(m[1]) * 100, m[2] === 'true', m[3] === 'true', 'index.html');
+      }
+    }
+  } catch {}
+  return (current.criteria = out);
+}
+function storylineCriteria(data) {
+  const quizName = id => { const q = (data.quizzes || []).find(x => x.id === id); return q ? q.lmstext || id : id; };
+  // Slides that count as viewed: those tracking views, plus the questions each question-bank draw shows
+  let counted = 0, drawn = 0;
+  for (const scene of data.scenes || []) for (const slide of scene.slides || []) if (slide.trackViews === true) counted++;
+  (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (o.kind === 'slidedraw') { const n = o.shuffle && o.shufflecount > 0 ? o.shufflecount : (o.sliderefs || []).length; drawn += n; return; }
+    for (const k in o) walk(o[k]);
+  })(data.scenes);
+  counted += drawn;
+  const criteria = (data.scorings || []).map(s => {
+    if (s.type === 'quiz') {
+      const names = (s.scoreRefs || []).map(r => '“' + quizName(r.ref) + '”').join(' and ');
+      return { kind: 'quiz', passPercent: s.passPercent, text: s.passPercent > 0
+        ? 'Pass the quiz ' + names + ' with ' + s.passPercent + '% or more'
+        : 'Finish the quiz ' + names + ' (pass mark 0%, so any score passes)' };
+    }
+    if (s.type === 'trigger') return { kind: 'trigger', text: 'Reach a slide with a Complete Course trigger' };
+    if (s.type === 'view') {
+      const from = drawn ? ', including ' + drawn + ' drawn from a question bank' : '';
+      return { kind: 'view', viewThreshold: s.viewThreshold, counted,
+        text: counted && s.viewThreshold >= counted ? 'View all ' + counted + ' slides' + (from ? ' (' + from.slice(2) + ')' : '')
+          : 'View at least ' + s.viewThreshold + ' slide' + (s.viewThreshold === 1 ? '' : 's') + (counted ? ' (of the ' + counted + ' that count' + from + ')' : '') };
+    }
+    return { kind: s.type, text: 'Storyline tracking type “' + s.type + '”' };
+  });
+  const status = v => ({ pass: 'Passed', complete: 'Completed', completed: 'Completed', fail: 'Failed', failed: 'Failed', incomplete: 'Incomplete' })[v] || v;
+  const s0 = (data.scorings || [])[0];
+  return {
+    tool: 'Articulate Storyline', source: 'html5/data/js/data.js', criteria,
+    any: criteria.length > 1,   // Storyline counts the course complete when any one is met
+    reports: s0 ? { met: status(s0.passStatus), notMet: status(s0.failStatus) } : null,
+    note: criteria.length ? '' : 'No tracking option is set in this Storyline file, so completion comes from the course’s own triggers.'
+  };
+}
+function videoPackagerCriteria(thresholdPercent, selfComplete, ack, source) {
+  const criteria = [{ kind: 'watch', text: 'Watch at least ' + (isNaN(thresholdPercent) ? '100' : Math.round(thresholdPercent)) + '% of the video (skipped parts don’t count)' }];
+  if (selfComplete) criteria.push({ kind: 'button', text: 'Or press the “Mark as complete” button' });
+  return { tool: 'SCORM Video Packager', source, criteria, any: selfComplete,
+    then: ack ? 'Then confirm the acknowledgement; completion is only reported after that.' : '',
+    reports: { met: 'Passed', notMet: 'Incomplete', score: 100 } };
+}
+
 function transformStoryline(rel, text) {
   if (rel === FLOW_FILES.xml) return flowOverride ? text.replace(FLOW_RE.xml, '$1' + flowOverride + '$3') : text;
   if (rel === FLOW_FILES.js) {
@@ -919,6 +990,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/xapi/events') return xapiEvents(req, res);
     if (p === '/upload' && req.method === 'POST') return await handleUpload(req, res);
     if (p === '/api/close' && req.method === 'POST') { closePackage(); return sendJson(res, 200, { ok: true }); }
+    if (p === '/api/criteria') return sendJson(res, 200, completionCriteria() || {});
     if (p === '/api/storyline') {
       if (req.method === 'POST') {
         const q = url.searchParams;

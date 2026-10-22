@@ -45,6 +45,11 @@ Only this computer can reach the test LMS. Unzipped packages go in a temporary f
 
 - **Course:** the course runs on the left, inside the test LMS, just as it would in a real LMS.
 - **Package:** at the top of the right panel, a badge shows the SCORM version in use (for example "SCORM 2004 · 4th edition"). Below it are the version the manifest declares, the LMS connection the course is given, and the number of course items.
+- **Completion criteria:** in the Package section, what decides whether the course counts as complete, in two layers:
+  - **Set in the course:** the authoring tool's tracking settings, where the test LMS can read them.
+    - **Articulate Storyline:** read from `html5/data/js/data.js`, for example "Pass the quiz with 80% or more" or "View all 17 slides". When a course has several options, it's complete when any one is met, and the first one met is reported. Also shown: what Storyline reports when the criteria are met and before then, with the SCORM fields it sets.
+    - **SCORM Video Packager:** read from `config.xml`: the watch threshold, the Mark as complete button, and the acknowledgement.
+  - **Set in the manifest (applied by the LMS):** the SCORM 1.2 mastery score, or the SCORM 2004 completion threshold and passing score. These override what the course reports. In packages with several items, each item's rules are shown when it's selected, and other items' rules are listed.
 - **Quiz answers:** for Storyline packages with quiz questions, a section listing every question and its correct answer, read from the answer key Storyline writes into `html5/data/js/data.js`.
   - **What it shows:** the question type, its points, and the quiz name and pass mark.
   - **Answers by question type:**

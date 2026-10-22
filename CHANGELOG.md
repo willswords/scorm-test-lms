@@ -2,7 +2,15 @@
 
 ## 2026-10-22
 
-If the test LMS was running when you updated its files, restart it (Ctrl+C, then run it again). **Quiz answers** needs the updated server; the other changes only need a page reload.
+If the test LMS was running when you updated its files, restart it (Ctrl+C, then run it again). **Quiz answers** and **Completion criteria** need the updated server; the other changes only need a page reload.
+
+- **Completion criteria.** The Package section now shows what decides whether the course counts as complete, in two layers.
+  - **Set in the course:** the authoring tool's tracking settings.
+    - **Articulate Storyline** (from `html5/data/js/data.js`): the quiz pass mark and/or the number of slides to view, for example "Pass the quiz “QUIZTest” with 80% or more" or "View all 17 slides (including 5 drawn from a question bank)". When a course has several options, it's complete when any one is met, and the first one met is reported. It also shows how Storyline reports to the LMS, such as Passed when met and Incomplete until then, with the SCORM fields it sets.
+    - **SCORM Video Packager** (from `config.xml`): the watch threshold, the Mark as complete button, and the acknowledgement.
+    - **Other tools:** the block says the rule isn't stated in a readable file.
+  - **Set in the manifest (applied by the LMS):** the SCORM 1.2 mastery score, or the SCORM 2004 completion threshold and passing score, which override what the course reports. In packages with several items, it shows the selected item's rules and lists the other items' rules.
+  - **Checked** against QUIZTest, the three Daily Report courses, Hangperson, a Video Packager package, and SCORM 2004 and xAPI test packages.
 
 - **Completion alerts.** When the LMS records the course as complete or passed, the whole page pulses green and a message at the top shows what was recorded and when, for example `cmi.core.lesson_status = "completed"`, "Saved by the LMS at 0:02.014 into the session". A fail pulses red.
   - **When it fires:** when the change is saved (on commit, or when the course finishes), because a value the course sets but never commits wouldn't reach a real LMS.

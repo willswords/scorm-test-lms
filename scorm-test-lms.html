@@ -99,6 +99,13 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 #issues .none{background:none;color:var(--muted);padding:0}
 .count{font-family:var(--mono);background:var(--surface2);border-radius:9px;padding:0 7px;color:var(--text);letter-spacing:0}
 
+#critBody{font-size:12px;margin-top:4px;display:flex;flex-direction:column;gap:6px}
+#critBody .who{color:var(--muted)}
+#critBody .who code{font-size:11px}
+#critBody ul{margin:2px 0 0;padding-left:18px}
+#critBody li{margin:1px 0}
+#critBody .rep{color:var(--muted);margin-top:2px}
+#critBody .rep code,#critBody li code{font-size:11px;color:var(--text)}
 #quizInfo{font-size:12px;color:var(--muted);margin-bottom:6px}
 #quizList{margin:0;padding:0 0 0 24px;font-size:12px;display:flex;flex-direction:column;gap:8px}
 #quizList li::marker{color:var(--muted);font-family:var(--mono);font-size:11px}
@@ -212,6 +219,10 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
     <section id="pkgSec">
       <h2><button class="sec-toggle" data-sec="pkgSec" aria-expanded="true" aria-controls="pkgSec"><span class="chev" aria-hidden="true"></span>Package</button></h2>
       <div id="pkgInfo"><span class="v-muted">No package loaded.</span></div>
+      <div id="critBox" hidden>
+        <div class="sl-head">Completion criteria</div>
+        <div id="critBody"></div>
+      </div>
       <div id="slBox" hidden>
         <div class="sl-head">Storyline testing <span class="v-muted">(files are swapped as they&rsquo;re served; the package isn&rsquo;t changed)</span></div>
         <label class="chk sl"><input type="checkbox" id="slFree"/> Free navigation (menu)</label>
@@ -909,6 +920,7 @@ function handleNav(nav) {
 // ════════════════════════════════════════════════════════════════════════════
 function launch() {
   if (!sco) return;
+  renderCriteria();   // per course item, as the manifest's rules can differ between items
   if (scormVer === 'xapi') return launchXapi();
   endSession(() => {
     saved = loadSaved();
@@ -1107,6 +1119,61 @@ async function openCurrentPackage() {
   launch();
 }
 
+// ── Completion criteria: what decides completion, from the course's authoring tool and from the manifest ──
+let critCache = { id: null, data: null };
+const STATUS_FIELDS = {
+  '1.2': { Passed: 'cmi.core.lesson_status = "passed"', Completed: 'cmi.core.lesson_status = "completed"', Failed: 'cmi.core.lesson_status = "failed"', Incomplete: 'cmi.core.lesson_status = "incomplete"' },
+  '2004': { Passed: 'cmi.success_status = "passed"', Completed: 'cmi.completion_status = "completed"', Failed: 'cmi.success_status = "failed"', Incomplete: 'cmi.completion_status = "incomplete"' }
+};
+async function renderCriteria() {
+  const box = $('critBox');
+  if (!pkg || !sco) { box.hidden = true; return; }
+  if (critCache.id !== pkg.id) {
+    let d = {};
+    try { d = await (await fetch('/api/criteria')).json(); } catch {}
+    critCache = { id: pkg.id, data: d };
+  }
+  const c = critCache.data || {};
+  const field = s => scormVer === 'xapi' ? (/^(Passed|Completed|Failed)$/.test(s) ? ' (a “' + s.toLowerCase() + '” statement)' : '')
+    : (STATUS_FIELDS[scormVer] || {})[s] ? ' (<code>' + esc(STATUS_FIELDS[scormVer][s]) + '</code>)' : '';
+  const block = (who, list, extra) => '<div><div class="who">' + who + '</div>' + (list.length ? '<ul>' + list.map(x => '<li>' + x + '</li>').join('') + '</ul>' : '') + (extra || '') + '</div>';
+
+  // 1. The course: its authoring tool's tracking settings
+  let course;
+  if (c.tool) {
+    const rep = c.reports ? '<div class="rep">Reports <b>' + esc(c.reports.met) + '</b>' + field(c.reports.met) + (c.reports.score ? ' with a score of ' + c.reports.score : '') +
+      ' when met, and <b>' + esc(c.reports.notMet) + '</b>' + field(c.reports.notMet) + ' until then.</div>' : '';
+    course = block('Set in the course (' + esc(c.tool) + ', <code>' + esc(c.source) + '</code>)' + (c.any ? ': complete when <b>any one</b> is met' + (c.tool === 'Articulate Storyline' ? ' (the first one met is reported)' : '') : '') + ':',
+      c.criteria.map(x => esc(x.text)),
+      (c.then ? '<div class="rep">' + esc(c.then) + '</div>' : '') + (c.note ? '<div class="rep">' + esc(c.note) + '</div>' : '') + rep);
+  } else {
+    course = block('Set in the course:', [], '<div class="rep">Not stated in any file the test LMS can read, so the course itself decides when to report completion. Watch the learner record and the completion alerts.</div>');
+  }
+
+  // 2. The manifest: rules the LMS applies itself, whatever the course reports
+  const rules = [];
+  if (scormVer === '2004') {
+    if (sco.completionThreshold) rules.push('Completion threshold <b>' + esc(sco.completionThreshold) + '</b>: <code>completion_status</code> is "completed" when <code>cmi.progress_measure</code> is ' + esc(sco.completionThreshold) + ' or more, "incomplete" below it.');
+    if (sco.scaledPassingScore) rules.push('Passing score <b>' + esc(sco.scaledPassingScore) + '</b>: <code>success_status</code> is "passed" when <code>cmi.score.scaled</code> is ' + esc(sco.scaledPassingScore) + ' or more, "failed" below it.');
+  } else if (scormVer === '1.2' && sco.masteryScore) {
+    rules.push('Mastery score <b>' + esc(sco.masteryScore) + '</b>: if the course reports a score, the LMS sets <code>lesson_status</code> to "passed" at ' + esc(sco.masteryScore) + ' or more and "failed" below it when the course finishes.');
+  }
+  const forItem = manifest && manifest.scos.length > 1 ? ' for “' + esc(sco.title) + '”' : '';
+  // Other course items may have different rules
+  const ruleSummary = s => scormVer === '2004'
+    ? [s.completionThreshold ? 'completion threshold ' + s.completionThreshold : '', s.scaledPassingScore ? 'passing score ' + s.scaledPassingScore : ''].filter(Boolean).join(', ')
+    : s.masteryScore ? 'mastery score ' + s.masteryScore : '';
+  const others = scormVer === 'xapi' || !manifest ? [] : manifest.scos.filter(s => s !== sco && ruleSummary(s));
+  const otherNote = others.length ? '<div class="rep">Other items have their own: ' + others.map(s => '“' + esc(s.title) + '” (' + esc(ruleSummary(s)) + ')').join(', ') +
+    '. Pick an item from the list at the top to switch to it.</div>' : '';
+  const manifestBlock = scormVer === 'xapi'
+    ? block('Set in the package (<code>tincan.xml</code>):', [], '<div class="rep">No completion rules; the LRS records the statements the course sends.</div>')
+    : block('Set in the manifest' + forItem + ' (applied by the LMS):', rules, (rules.length ? '' : '<div class="rep">None, so the LMS records the status the course reports.</div>') + otherNote);
+
+  $('critBody').innerHTML = course + manifestBlock;
+  box.hidden = false;
+}
+
 // ── Storyline packages: switch the menu navigation between "free" and "restricted" ──
 // The server swaps the value as it serves frame.js and frame.xml; the package files aren't changed.
 async function refreshStoryline() {
@@ -1240,6 +1307,7 @@ function resetToEmpty() {
   $('verLabel').textContent = 'SCORM 1.2 · 2004 · xAPI';
   $('pkgInfo').innerHTML = '<span class="v-muted">No package loaded.</span>';
   $('slBox').hidden = true;
+  $('critBox').hidden = true;
   $('quizSec').hidden = true;
   watchPrefilledText(false);
   $('btnLaunch').textContent = 'Launch';

@@ -4,32 +4,7 @@
 
 If the test LMS was running when you updated its files, restart it (Ctrl+C, then run it again). **Quiz answers** and **Completion criteria** need the updated server; the other changes only need a page reload.
 
-- **Progress data size (`suspend_data`).** SCORM 1.2 LMSs only have to accept 4,096 characters (SCORM 2004: 4,000, or 64,000 in the 4th edition), and Storyline quizzes can go over late in the quiz without anyone noticing.
-  - **Early warning:** an issue at 80% of the limit, with the size shown amber in the learner record.
-  - **Over the limit:** an error issue explaining that progress will be lost on relaunch, and the size in red with the largest size tried.
-  - **New "suspend_data over the limit" setting** (Package section, **LMS behaviour**):
-    - **Reject it** (the default): error 405 in 1.2, 351 in 2004. SCORM 2004 values over the limit used to be stored with only a warning.
-    - **Cut it off silently**, as some LMSs do.
-    - **Store it all**, as lenient LMSs do.
-- **SCORM 1.2 vs 2004 status checks.** Strict LMSs don't paper over these, so they're now flagged:
-  - a SCORM 2004 element (such as `cmi.completion_status`) used in a 1.2 package, or a 1.2 one (`cmi.core.lesson_status`) in a 2004 package
-  - a 1.2 value in 2004, such as `completion_status = "passed"`, with an explanation of where pass/fail goes instead
-  - a 2004 course reporting `success_status = "passed"` but leaving `completion_status` incomplete
-  - a score with `completion_status = "completed"` but no `success_status`
-- **Close like a browser tab.** A new button (Package section, **LMS behaviour**) closes the course the way a learner closing the browser does: the calls it makes while closing are lost and shown crossed out in the log, so the LMS keeps only what was committed before. It flags values lost because they weren't committed yet, and an exit that wasn't set to "suspend" before the close, which means no resume next time. Then press **Relaunch**. Mid-quiz is where resume usually falls apart.
-- **Resume check.** A course relaunched to resume that never reads back its `suspend_data` is flagged, because it probably started from the beginning.
-- **Tested** with small SCORM 1.2 and 2004 test courses, covering:
-  - all three over-limit settings in both versions
-  - each status and element-name check
-  - a browser-tab close mid-course: the four closing calls were lost, the committed progress was kept, and the uncommitted location was lost
-  - a resume where the course ignored its saved data
-- **Completion criteria.** The Package section now shows what decides whether the course counts as complete, in two layers.
-  - **Set in the course:** the authoring tool's tracking settings.
-    - **Articulate Storyline** (from `html5/data/js/data.js`): the quiz pass mark and/or the number of slides to view, for example "Pass the quiz “QUIZTest” with 80% or more" or "View all 17 slides (including 5 drawn from a question bank)". When a course has several options, it's complete when any one is met, and the first one met is reported. It also shows how Storyline reports to the LMS, such as Passed when met and Incomplete until then, with the SCORM fields it sets.
-    - **SCORM Video Packager** (from `config.xml`): the watch threshold, the Mark as complete button, and the acknowledgement.
-    - **Other tools:** the block says the rule isn't stated in a readable file.
-  - **Set in the manifest (applied by the LMS):** the SCORM 1.2 mastery score, or the SCORM 2004 completion threshold and passing score, which override what the course reports. In packages with several items, it shows the selected item's rules and lists the other items' rules.
-  - **Checked** against QUIZTest, the three Daily Report courses, Hangperson, a Video Packager package, and SCORM 2004 and xAPI test packages.
+### Completion and status
 
 - **Completion alerts.** When the LMS records the course as complete or passed, the whole page pulses green and a message at the top shows what was recorded and when, for example `cmi.core.lesson_status = "completed"`, "Saved by the LMS at 0:02.014 into the session". A fail pulses red.
   - **When it fires:** when the change is saved (on commit, or when the course finishes), because a value the course sets but never commits wouldn't reach a real LMS.
@@ -38,6 +13,46 @@ If the test LMS was running when you updated its files, restart it (Ctrl+C, then
   - **No repeats:** it only fires on a change during the current launch. Re-sending "completed", relaunching a learner who's already complete, and setting a status from **Learner status** don't set it off.
   - **Stays recorded:** the message disappears after 15 seconds (or click ×), but a highlighted line stays in the log and in the CSV.
   - **Reduced motion:** if your system is set to reduce motion, the page fades once instead of pulsing.
+- **Completion criteria.** The Package section now shows what decides whether the course counts as complete, in two layers.
+  - **Set in the course:** the authoring tool's tracking settings.
+    - **Articulate Storyline** (from `html5/data/js/data.js`): the quiz pass mark and/or the number of slides to view, for example "Pass the quiz “QUIZTest” with 80% or more" or "View all 17 slides (including 5 drawn from a question bank)". When a course has several options, it's complete when any one is met, and the first one met is reported. It also shows how Storyline reports to the LMS, such as Passed when met and Incomplete until then, with the SCORM fields it sets.
+    - **SCORM Video Packager** (from `config.xml`): the watch threshold, the Mark as complete button, and the acknowledgement.
+    - **Other tools:** the block says the rule isn't stated in a readable file.
+  - **Set in the manifest (applied by the LMS):** the SCORM 1.2 mastery score, or the SCORM 2004 completion threshold and passing score, which override what the course reports. In packages with several items, it shows the selected item's rules and lists the other items' rules.
+  - **Checked** against QUIZTest, the three Daily Report courses, Hangperson, a Video Packager package, and SCORM 2004 and xAPI test packages.
+- **SCORM 1.2 vs 2004 status checks.** Strict LMSs don't paper over these, so they're now flagged:
+  - a SCORM 2004 element (such as `cmi.completion_status`) used in a 1.2 package, or a 1.2 one (`cmi.core.lesson_status`) in a 2004 package
+  - a 1.2 value in 2004, such as `completion_status = "passed"`, with an explanation of where pass/fail goes instead
+  - a 2004 course reporting `success_status = "passed"` but leaving `completion_status` incomplete
+  - a score with `completion_status = "completed"` but no `success_status`
+
+### Progress data and resuming
+
+- **Progress data size (`suspend_data`).** SCORM 1.2 LMSs only have to accept 4,096 characters (SCORM 2004: 4,000, or 64,000 in the 4th edition), and Storyline quizzes can go over late in the quiz without anyone noticing.
+  - **Early warning:** an issue at 80% of the limit, with the size shown amber in the learner record.
+  - **Over the limit:** an error issue explaining that progress will be lost on relaunch, and the size in red with the largest size tried.
+  - **New "suspend_data over the limit" setting** (Package section, **LMS behaviour**):
+    - **Reject it** (the default): error 405 in 1.2, 351 in 2004. SCORM 2004 values over the limit used to be stored with only a warning.
+    - **Cut it off silently**, as some LMSs do.
+    - **Store it all**, as lenient LMSs do.
+- **Edit suspend_data.** An **Edit** button next to `suspend_data` in the learner record (SCORM only) opens the saved value in an editor, with a character count against the limit.
+  - **Save and relaunch:** closes the course first, so its exit code can't overwrite the edit, then relaunches.
+  - **Relaunch as a resume** (on by default): makes the course read the edited data back.
+  - **Uses:** testing damaged, old or oversized progress data, or jumping a learner forward.
+  - **Always current:** it opens with the latest value the course has set, and says when the course hasn't committed it yet. If the course changes it while the editor is open, the text updates itself. If you've already started editing, a note offers **Load the latest** instead of overwriting your text.
+  - **Tested** with a video package: editing its bookmark to "fully watched, at 0:05" made it resume at 0:05 with 100% watched and report completion.
+- **Learner record keeps values expanded or collapsed.** `suspend_data` and other long values stay as you last left them. That applies when the course updates the value, when it goes from blank to having data, after a relaunch, and after a page reload, so you no longer have to click the triangle again after every change. The choice is remembered in your browser.
+- **Close like a browser tab.** A new button (Package section, **LMS behaviour**) closes the course the way a learner closing the browser does: the calls it makes while closing are lost and shown crossed out in the log, so the LMS keeps only what was committed before. It flags values lost because they weren't committed yet, and an exit that wasn't set to "suspend" before the close, which means no resume next time. Then press **Relaunch**. Mid-quiz is where resume usually falls apart.
+- **Resume check.** A course relaunched to resume that never reads back its `suspend_data` is flagged, because it probably started from the beginning.
+- **Tested** with small SCORM 1.2 and 2004 test courses, covering:
+  - all three over-limit settings in both versions
+  - each status and element-name check
+  - a browser-tab close mid-course: the four closing calls were lost, the committed progress was kept, and the uncommitted location was lost
+  - a resume where the course ignored its saved data
+
+### Storyline
+
+- **Storyline testing has its own section.** It moved out of the Package section into its own section below it, which collapses like the others. It only appears for Storyline packages.
 - **Quiz answers for Storyline courses.** A new **Quiz answers** section in the right panel lists every quiz question with its correct answer, read from the answer key Storyline writes into `html5/data/js/data.js`. The package's code is never run to do this.
   - **What it shows:** the question type, its points, and the quiz name and pass mark. Questions from a question bank are marked "bank", because the quiz may draw only some of them. When a question is only labelled something like "Multiple Choice", its wording is taken from the slide.
   - **Answers by question type:**
@@ -56,11 +71,14 @@ If the test LMS was running when you updated its files, restart it (Ctrl+C, then
   - **Your package isn't changed.** As with the other Storyline options, only the answer values are swapped as the files are served.
   - **Resuming:** if the learner is resuming, Storyline restores their own saved answers instead, so use **Reset learner** for a clean run.
   - **Tested** with QUIZTest (10 questions) and QUIZTest-multipleQuestionTypesTest (9 questions of 7 types). Every pre-filled question was scored correct by Storyline, and QUIZTest was recorded as passed with 100%. It was also checked against a course that draws its questions from a question bank, including a multiple-response and a matching question.
-- **Asks whether to clear the log when you open another package.** If the log has lines in it, a dialog asks before the new package opens, for example "It has 6 lines from “resend_noack.zip”".
-  - **Clear log** (the default button) also removes the previous course's closing calls, and nothing from the new package is lost.
-  - **Keep it**, or Esc, keeps everything and adds a divider line ("New package: …") where the new package starts.
-  - **No question when the log is empty:** for example, when opening the first package.
-- **Storyline testing has its own section.** It moved out of the Package section into its own section below it, which collapses like the others. It only appears for Storyline packages.
+
+### The right panel and the log
+
+- **Choose which panel sections show.** A new **⚙ Sections** button in the header opens **Panel sections**, with a checkbox for each section. The choices are Package (with its Completion criteria and LMS behaviour blocks), Storyline testing, Quiz answers, Learner record, Issues and the call log.
+  - **Applying:** changes apply as you tick and are remembered in your browser. **Show all** turns everything back on.
+  - **Sections that only sometimes apply:** Storyline testing and Quiz answers still only appear for packages they apply to.
+  - **Space:** turning the call log off gives its room to the other sections.
+  - **All off:** the panel says so and offers a button to choose again.
 - **Resizable right panel.** Drag the panel's left edge to make it wider or narrower. It works smoothly over the course, without clicking anything in it or reloading it.
   - **Limits:** at least 300 pixels wide, and the course always keeps at least 360 pixels, including when the window is made smaller.
   - **Resetting:** double-click the edge to go back to 430 pixels.
@@ -70,6 +88,10 @@ If the test LMS was running when you updated its files, restart it (Ctrl+C, then
   - **To bring it back:** click the **Show LMS panel** tab on the right edge, or the header button.
   - **Issues stay visible:** the tab shows the number of issues so far, in red if any are errors.
   - **Remembered:** the choice is saved in your browser. On a phone-width screen the tab becomes a bar under the course.
+- **Asks whether to clear the log when you open another package.** If the log has lines in it, a dialog asks before the new package opens, for example "It has 6 lines from “resend_noack.zip”".
+  - **Clear log** (the default button) also removes the previous course's closing calls, and nothing from the new package is lost.
+  - **Keep it**, or Esc, keeps everything and adds a divider line ("New package: …") where the new package starts.
+  - **No question when the log is empty:** for example, when opening the first package.
 
 ## 2026-10-21
 

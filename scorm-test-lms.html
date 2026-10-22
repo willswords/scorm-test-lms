@@ -97,7 +97,7 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .sl-head .v-muted{text-transform:none;letter-spacing:0;font-weight:400}
 .chk.sl{margin-top:6px;color:var(--text);font-weight:600}
 .sl-intro{font-size:12px;color:var(--muted)}
-.panel:has(#logSec:not(.collapsed)) #slSec{max-height:30%}
+.panel:has(#logSec:not(.collapsed):not(.pref-off)) #slSec{max-height:30%}
 .sl-note{font:11px/1.5 var(--mono);color:var(--muted);margin:2px 0 0 22px;word-break:break-all}
 .v-ok{color:var(--ok)}
 .v-muted{color:var(--muted)}
@@ -127,9 +127,9 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 #quizList .ans{color:var(--ok);font-weight:600;margin-top:2px;padding-left:16px;text-indent:-16px}
 #quizList .ans::before{content:'\2713';display:inline-block;width:16px;text-indent:0}
 #quizList .none{color:var(--muted);font-style:italic;margin-top:2px}
-.panel:has(#logSec:not(.collapsed)) #quizSec{max-height:30%}
-.panel:has(#logSec:not(.collapsed)) #recSec{max-height:35%}
-.panel:has(#logSec:not(.collapsed)) #issuesSec{max-height:25%}
+.panel:has(#logSec:not(.collapsed):not(.pref-off)) #quizSec{max-height:30%}
+.panel:has(#logSec:not(.collapsed):not(.pref-off)) #recSec{max-height:35%}
+.panel:has(#logSec:not(.collapsed):not(.pref-off)) #issuesSec{max-height:25%}
 #logSec{flex:1 1 0;display:flex;flex-direction:column;min-height:min(240px,40%);border-bottom:0;overflow:hidden}
 #logSec.collapsed{flex:0 0 auto;min-height:0}
 #log{flex:1;min-height:0;overflow:auto;font:12px/1.5 var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:6px}
@@ -148,11 +148,30 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .row.milestone .c{color:var(--ok);font-family:var(--sans);font-weight:600}
 .row.milestone.fail{background:color-mix(in srgb,var(--err) 16%,transparent)}
 .row.milestone.fail .c{color:var(--err)}
-#clearLogDlg{max-width:min(440px,calc(100vw - 32px));padding:18px 20px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 12px 36px rgba(0,0,0,.3)}
-#clearLogDlg::backdrop{background:rgba(0,0,0,.35)}
-#clearLogDlg h3{margin:0 0 8px;font-size:16px}
-#clearLogDlg p{margin:0 0 16px;color:var(--muted);overflow-wrap:anywhere}
-#clearLogDlg .dlg-actions{display:flex;justify-content:flex-end;gap:8px}
+.lms-dlg{max-width:min(440px,calc(100vw - 32px));padding:18px 20px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 12px 36px rgba(0,0,0,.3)}
+.lms-dlg::backdrop{background:rgba(0,0,0,.35)}
+.lms-dlg h3{margin:0 0 8px;font-size:16px}
+.lms-dlg p{margin:0 0 16px;color:var(--muted);overflow-wrap:anywhere}
+.lms-dlg .dlg-actions{display:flex;justify-content:flex-end;gap:8px}
+/* Panel sections: turned off by the user */
+.pref-off{display:none !important}
+.sec-list{display:flex;flex-direction:column;gap:2px;margin:0 0 16px}
+.sec-list label{display:flex;align-items:baseline;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;font-weight:600}
+.sec-list label:hover{background:var(--surface2)}
+.sec-list label.sub{margin-left:24px;font-weight:400}
+.sec-list label.disabled{opacity:.5;cursor:default}
+.sec-list .sec-note{font-weight:400;font-size:12px;color:var(--muted)}
+.panel-empty{padding:16px 14px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+/* Editing suspend_data */
+#sdDlg{width:min(720px,calc(100vw - 32px));max-width:none}
+#sdDlg p{margin-bottom:10px}
+#sdText{width:100%;min-height:220px;resize:vertical;font:12px/1.45 var(--mono);color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;word-break:break-all}
+#sdDlg .sd-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;margin:6px 0 14px;font-size:12px;color:var(--muted)}
+#sdDlg .chk{color:var(--text)}
+#sdDlg .sd-source{font-size:12px;color:var(--muted);margin-bottom:6px}
+#sdDlg .sd-changed{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:6px 8px;margin-bottom:6px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+#sdDlg .sd-changed button{font-size:12px;padding:1px 8px}
+.rec .mini{font:11px var(--sans);padding:0 7px;margin-left:6px;vertical-align:1px}
 /* Status change: the whole page pulses, and a message shows at the top */
 #statusFlash{--flash:var(--ok);position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;
   background:color-mix(in srgb,var(--flash) 14%,transparent);
@@ -220,11 +239,34 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
     <button id="btnClose" disabled title="Unload this package and return to the start screen">Close package</button>
     <input type="file" id="fileIn" accept=".zip,application/zip" hidden/>
     <span class="sep"></span>
+    <button id="btnSections" aria-haspopup="dialog" title="Choose which sections the right panel shows">⚙ Sections</button>
     <button id="btnPanel" aria-controls="lmsPanel" aria-expanded="true" title="Hide the LMS panel to give the course the full width">Hide panel ⇥</button>
   </div>
 </header>
 <div id="banner" class="banner" hidden></div>
-<dialog id="clearLogDlg" aria-labelledby="clearLogTitle" aria-describedby="clearLogText">
+<dialog id="secDlg" class="lms-dlg" aria-labelledby="secTitle" aria-describedby="secIntro">
+  <form method="dialog">
+    <h3 id="secTitle">Panel sections</h3>
+    <p id="secIntro">Choose which sections the right panel shows. Changes apply straight away and are remembered in this browser. Sections marked “when it applies” only appear for packages they’re relevant to.</p>
+    <div class="sec-list" id="secList"></div>
+    <div class="dlg-actions"><button type="button" id="secShowAll">Show all</button><button value="done" class="primary">Done</button></div>
+  </form>
+</dialog>
+<dialog id="sdDlg" class="lms-dlg" aria-labelledby="sdTitle" aria-describedby="sdIntro">
+  <form method="dialog">
+    <h3 id="sdTitle">Edit suspend_data</h3>
+    <p id="sdIntro">The learner’s progress data. Saving closes the course (its exit code runs first), stores your text, and relaunches it so the course reads the edited data.</p>
+    <div class="sd-source" id="sdSource" aria-live="polite"></div>
+    <div class="sd-changed" id="sdChanged" hidden>The course has changed suspend_data since you started editing (now <span id="sdChangedLen"></span>). <button type="button" id="sdLoadLatest">Load the latest</button></div>
+    <textarea id="sdText" spellcheck="false" aria-label="suspend_data"></textarea>
+    <div class="sd-meta">
+      <span id="sdCount" aria-live="polite"></span>
+      <label class="chk"><input type="checkbox" id="sdResume" checked/> Relaunch as a resume, so the course reads it</label>
+    </div>
+    <div class="dlg-actions"><button value="cancel">Cancel</button><button value="save" class="primary" id="sdSave">Save and relaunch</button></div>
+  </form>
+</dialog>
+<dialog id="clearLogDlg" class="lms-dlg" aria-labelledby="clearLogTitle" aria-describedby="clearLogText">
   <form method="dialog">
     <h3 id="clearLogTitle">Clear the log?</h3>
     <p id="clearLogText"></p>
@@ -248,6 +290,7 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
   <div id="panelResizer" role="separator" aria-orientation="vertical" aria-controls="lmsPanel" aria-label="Resize the LMS panel"
     tabindex="0" title="Drag to resize the panel (double-click to reset)"></div>
   <aside class="panel" id="lmsPanel">
+    <div class="panel-empty" id="panelEmpty" hidden>All panel sections are turned off. <button type="button" data-act="open-sections">Choose sections…</button></div>
     <section id="pkgSec">
       <h2><button class="sec-toggle" data-sec="pkgSec" aria-expanded="true" aria-controls="pkgSec"><span class="chev" aria-hidden="true"></span>Package</button></h2>
       <div id="pkgInfo"><span class="v-muted">No package loaded.</span></div>
@@ -1694,11 +1737,29 @@ function announceStatus(ok, title, parts, when) {
 }
 $('stClose').addEventListener('click', () => { $('statusToast').hidden = true; clearTimeout(toastTimer); });
 
+// Expandable values in the learner record (such as suspend_data) stay as the user last left them, expanded or not,
+// whenever the record is redrawn: as the data changes, when it first appears, after a relaunch, and after a reload
+const REC_OPEN_KEY = 'scormlms:recOpen';
+let recOpen = new Set();
+try { recOpen = new Set(JSON.parse(localStorage.getItem(REC_OPEN_KEY)) || []); } catch {}
+const recKeyOf = d => { const tr = d.closest('tr'), th = tr && tr.querySelector('th'); return th ? th.textContent : ''; };
+function setRecHtml(tbl, html) {
+  tbl.innerHTML = html;
+  tbl.querySelectorAll('details').forEach(d => { d.open = recOpen.has(recKeyOf(d)); });
+}
+// "toggle" doesn't bubble, so listen while it travels down
+$('recTbl').addEventListener('toggle', e => {
+  const d = e.target, key = d.tagName === 'DETAILS' ? recKeyOf(d) : '';
+  if (!key || d.open === recOpen.has(key)) return;
+  if (d.open) recOpen.add(key); else recOpen.delete(key);
+  try { localStorage.setItem(REC_OPEN_KEY, JSON.stringify([...recOpen])); } catch {}
+}, true);
 let renderQueued = false;
 function scheduleRender() { if (!renderQueued) { renderQueued = true; requestAnimationFrame(render); } }
 function render() {
   renderQueued = false;
   $('btnTabClose').disabled = !(session && !session.xapi && session.initialized && !session.finished);
+  syncSdDialog();
   const tbl = $('recTbl');
   if (sco) checkStatus(); else statusBase = null;
   if (!sco) { tbl.innerHTML = '<tr><td class="v-muted">No package loaded.</td></tr>'; return; }
@@ -1706,14 +1767,14 @@ function render() {
   const add = (k, v, cls) => rows.push('<tr><th>' + k + '</th><td class="' + (cls || '') + '">' + v + '</td></tr>');
   const group = t => rows.push('<tr class="group"><th colspan="2">' + t + '</th></tr>');
   const blank = v => v === '' ? '<span class="v-muted">(blank)</span>' : esc(v);
-  if (scormVer === 'xapi') { renderXapi(add, group, blank); tbl.innerHTML = rows.join(''); return; }
+  if (scormVer === 'xapi') { renderXapi(add, group, blank); setRecHtml(tbl, rows.join('')); return; }
   const r = rec || loadSaved();
-  if (r.v === '2004') { render04(r, add, group, blank); tbl.innerHTML = rows.join(''); return; }
+  if (r.v === '2004') { render04(r, add, group, blank); setRecHtml(tbl, rows.join('')); return; }
   group('Learner record (as the course sees it)');
   add('lesson_status', esc(r.lesson_status), ['passed', 'completed'].includes(r.lesson_status) ? 'v-ok' : '');
   add('score', r.score_raw === '' ? '<span class="v-muted">(none)</span>' : esc(r.score_raw) + ' <span class="v-muted">(min ' + (esc(r.score_min) || '–') + ', max ' + (esc(r.score_max) || '–') + ')</span>');
   add('lesson_location', blank(r.lesson_location));
-  add('suspend_data', suspendSummary(r));
+  add('suspend_data', suspendSummary(r) + editSuspendButton());
   add('total_time', esc(r.total_time));
   if (r.objectives.length) add('objectives', String(r.objectives.length));
   if (r.interactions.length) add('interactions', String(r.interactions.length));
@@ -1731,7 +1792,7 @@ function render() {
     add('next entry', blank(r.entry));
   }
   add('launches', String((saved || r).launches));
-  tbl.innerHTML = rows.join('');
+  setRecHtml(tbl, rows.join(''));
 }
 function render04(r, add, group, blank) {
   const none = '<span class="v-muted">(none)</span>';
@@ -1745,7 +1806,7 @@ function render04(r, add, group, blank) {
       ' <span class="v-muted">(min ' + (esc(sc.min) || '–') + ', max ' + (esc(sc.max) || '–') + ')</span>' : ''));
   if (r.progress_measure !== '') add('progress_measure', esc(r.progress_measure));
   add('location', blank(r.location));
-  add('suspend_data', suspendSummary(r));
+  add('suspend_data', suspendSummary(r) + editSuspendButton());
   add('total_time', esc(csToIso(r.total_cs)));
   if (r.objectives.length) add('objectives', String(r.objectives.length));
   if (r.interactions.length) add('interactions', String(r.interactions.length));
@@ -1821,6 +1882,62 @@ $('statusSel').addEventListener('change', e => {
     rec = null;
     statusBase = null;   // set by the tester, so not announced as the course's doing
     note('Learner status set to "' + v + '" by the tester.');
+    launch();
+  });
+});
+
+// ── Edit the learner's saved suspend_data (SCORM). Like Learner status: close the course, change the record, relaunch ──
+const editSuspendButton = () => scormVer === 'xapi' || !sco ? '' : '<button type="button" class="mini" data-act="edit-suspend" title="Edit what the LMS has saved">Edit</button>';
+function updateSdCount() {
+  const limit = suspendLimitNow(), len = $('sdText').value.length, c = $('sdCount');
+  c.textContent = fmtNum(len) + ' / ' + fmtNum(limit) + ' characters' + (len > limit ? ' — over the limit: a strict LMS wouldn’t store this' : '');
+  c.className = len > limit ? 'v-err' : len >= limit * 0.8 ? 'v-warn' : '';
+}
+// The latest value: what the course has set during this session (even if not committed yet), else what the LMS has saved
+const latestSuspend = () => ((session && !session.xapi && rec ? rec : saved || loadSaved()).suspend_data || '');
+let sdBase = '';   // the value the editor last loaded; if the text still matches it, the user hasn't edited
+function loadSdText() {
+  sdBase = latestSuspend();
+  $('sdText').value = sdBase;
+  $('sdChanged').hidden = true;
+  const stored = (saved || loadSaved()).suspend_data || '';
+  $('sdSource').textContent = sdBase === stored ? 'Showing what the LMS has saved.'
+    : 'Showing the latest value the course has set. It hasn’t committed it yet, so the LMS still has an older one.';
+  updateSdCount();
+}
+// Called after every LMS call: keep the editor up to date while it's open
+function syncSdDialog() {
+  if (!$('sdDlg').open) return;
+  const now = latestSuspend();
+  if (now === sdBase) return;
+  if ($('sdText').value === sdBase) { loadSdText(); $('sdSource').textContent = 'Updated: the course has just changed it. ' + $('sdSource').textContent; }
+  else { $('sdChangedLen').textContent = fmtNum(now.length) + ' characters'; $('sdChanged').hidden = false; }
+}
+$('recTbl').addEventListener('click', e => {
+  if (!e.target.closest('[data-act="edit-suspend"]') || !sco || scormVer === 'xapi') return;
+  e.preventDefault();   // don't also open or close the <details> around the value
+  const dlg = $('sdDlg');
+  loadSdText();
+  $('sdResume').checked = true;
+  dlg.returnValue = '';
+  dlg.showModal();
+  $('sdText').focus();
+});
+$('sdLoadLatest').addEventListener('click', () => { loadSdText(); $('sdText').focus(); });
+$('sdText').addEventListener('input', updateSdCount);
+$('sdDlg').addEventListener('close', () => {
+  if ($('sdDlg').returnValue !== 'save') return;
+  const text = $('sdText').value, asResume = $('sdResume').checked;
+  // Close the course first so its exit code can't overwrite the edit
+  endSession(() => {
+    saved = loadSaved();
+    saved.suspend_data = text;
+    if (scormVer === '2004') saved.newAttemptNext = false;   // keep this attempt, or the edit would be cleared
+    if (asResume) saved.entry = 'resume';
+    persist();
+    rec = null;
+    statusBase = null;
+    note('suspend_data edited by the tester: ' + fmtNum(text.length) + ' characters' + (asResume ? '; relaunching as a resume.' : '.'));
     launch();
   });
 });
@@ -1985,6 +2102,50 @@ resizer.addEventListener('keydown', e => {
 });
 window.addEventListener('resize', () => setPanelWidth(panelW, false));
 try { const w = parseInt(localStorage.getItem(PANEL_W_KEY), 10); setPanelWidth(w > 0 ? w : PANEL_W_DEFAULT, false); } catch { setPanelWidth(PANEL_W_DEFAULT, false); }
+
+// ── Panel sections: which ones the right panel shows (the "⚙ Sections" dialog; remembered in this browser) ──
+const SECTIONS = [
+  { id: 'pkgSec', label: 'Package', note: 'SCORM version, LMS connection, course items' },
+  { id: 'critBox', label: 'Completion criteria', parent: 'pkgSec' },
+  { id: 'lmsBox', label: 'LMS behaviour', parent: 'pkgSec', note: 'suspend_data limit, Close like a browser tab' },
+  { id: 'slSec', label: 'Storyline testing', note: 'when it applies: Storyline packages' },
+  { id: 'quizSec', label: 'Quiz answers', note: 'when it applies: Storyline quizzes' },
+  { id: 'recSec', label: 'Learner record' },
+  { id: 'issuesSec', label: 'Issues' },
+  { id: 'logSec', label: 'Call log', note: 'LMS calls, or LRS requests for xAPI' },
+];
+const SECTIONS_KEY = 'scormlms:sectionsOff';
+let sectionsOff = new Set();
+try { sectionsOff = new Set(JSON.parse(localStorage.getItem(SECTIONS_KEY)) || []); } catch {}
+function applySections() {
+  for (const s of SECTIONS) $(s.id).classList.toggle('pref-off', sectionsOff.has(s.id));
+  $('panelEmpty').hidden = SECTIONS.some(s => !s.parent && !sectionsOff.has(s.id));
+  try { localStorage.setItem(SECTIONS_KEY, JSON.stringify([...sectionsOff])); } catch {}
+}
+function buildSectionList() {
+  $('secList').innerHTML = SECTIONS.map(s => {
+    const parentOff = s.parent && sectionsOff.has(s.parent);
+    return '<label class="' + (s.parent ? 'sub' : '') + (parentOff ? ' disabled' : '') + '"><input type="checkbox" data-sec="' + s.id + '"' +
+      (sectionsOff.has(s.id) ? '' : ' checked') + (parentOff ? ' disabled' : '') + '/> <span>' + esc(s.label) +
+      (s.note ? ' <span class="sec-note">(' + esc(s.note) + ')</span>' : '') + '</span></label>';
+  }).join('');
+}
+function openSections() {
+  buildSectionList();
+  $('secDlg').showModal();
+  const first = $('secList').querySelector('input'); if (first) first.focus();
+}
+$('secList').addEventListener('change', e => {
+  const id = e.target.dataset.sec; if (!id) return;
+  if (e.target.checked) sectionsOff.delete(id); else sectionsOff.add(id);
+  applySections();
+  buildSectionList();   // a parent's sub-blocks are greyed out while it's off
+  const again = $('secList').querySelector('[data-sec="' + id + '"]'); if (again) again.focus();
+});
+$('secShowAll').addEventListener('click', () => { sectionsOff.clear(); applySections(); buildSectionList(); });
+$('btnSections').addEventListener('click', openSections);
+$('lmsPanel').addEventListener('click', e => { if (e.target.closest('[data-act="open-sections"]')) openSections(); });
+applySections();
 
 // ── Collapsible sections in the right panel (remembered in this browser) ──
 const COLLAPSE_KEY = 'scormlms:collapsed';

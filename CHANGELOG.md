@@ -37,6 +37,10 @@ If the test LMS was running when you updated its files, restart it (Ctrl+C, then
   - **Your package isn't changed.** As with the other Storyline options, only the answer values are swapped as the files are served.
   - **Resuming:** if the learner is resuming, Storyline restores their own saved answers instead, so use **Reset learner** for a clean run.
   - **Tested** with QUIZTest (10 questions) and QUIZTest-multipleQuestionTypesTest (9 questions of 7 types). Every pre-filled question was scored correct by Storyline, and QUIZTest was recorded as passed with 100%. It was also checked against a course that draws its questions from a question bank, including a multiple-response and a matching question.
+- **Asks whether to clear the log when you open another package.** If the log has lines in it, a dialog asks before the new package opens, for example "It has 6 lines from “resend_noack.zip”".
+  - **Clear log** (the default button) also removes the previous course's closing calls, and nothing from the new package is lost.
+  - **Keep it**, or Esc, keeps everything and adds a divider line ("New package: …") where the new package starts.
+  - **No question when the log is empty:** for example, when opening the first package.
 - **Hide the whole right panel.** A new **Hide panel** button in the header gives the course the full width, without relaunching or reloading it.
   - **To bring it back:** click the **Show LMS panel** tab on the right edge, or the header button.
   - **Issues stay visible:** the tab shows the number of issues so far, in red if any are errors.

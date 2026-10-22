@@ -131,6 +131,11 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .row.milestone .c{color:var(--ok);font-family:var(--sans);font-weight:600}
 .row.milestone.fail{background:color-mix(in srgb,var(--err) 16%,transparent)}
 .row.milestone.fail .c{color:var(--err)}
+#clearLogDlg{max-width:min(440px,calc(100vw - 32px));padding:18px 20px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 12px 36px rgba(0,0,0,.3)}
+#clearLogDlg::backdrop{background:rgba(0,0,0,.35)}
+#clearLogDlg h3{margin:0 0 8px;font-size:16px}
+#clearLogDlg p{margin:0 0 16px;color:var(--muted);overflow-wrap:anywhere}
+#clearLogDlg .dlg-actions{display:flex;justify-content:flex-end;gap:8px}
 /* Status change: the whole page pulses, and a message shows at the top */
 #statusFlash{--flash:var(--ok);position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;
   background:color-mix(in srgb,var(--flash) 14%,transparent);
@@ -201,6 +206,13 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
   </div>
 </header>
 <div id="banner" class="banner" hidden></div>
+<dialog id="clearLogDlg" aria-labelledby="clearLogTitle" aria-describedby="clearLogText">
+  <form method="dialog">
+    <h3 id="clearLogTitle">Clear the log?</h3>
+    <p id="clearLogText"></p>
+    <div class="dlg-actions"><button value="keep">Keep it</button><button value="clear" class="primary" id="clearLogYes">Clear log</button></div>
+  </form>
+</dialog>
 <div id="statusFlash" aria-hidden="true"></div>
 <div id="statusToast" role="status" aria-live="assertive" hidden>
   <span class="st-icon" id="stIcon" aria-hidden="true">✓</span>
@@ -1714,9 +1726,26 @@ $('btnCsv').addEventListener('click', () => {
 });
 
 // ── Loading a package from the page ──
+// Before a new package opens, ask whether to clear the log left by the previous one
+function askClearLog(fileName) {
+  const rows = $('log').childElementCount;
+  if (!rows) return Promise.resolve(false);
+  const dlg = $('clearLogDlg');
+  const title = $('logTitle').textContent;
+  $('clearLogTitle').textContent = 'Clear the ' + title + ' log?';
+  $('clearLogText').textContent = 'It has ' + rows + ' line' + (rows === 1 ? '' : 's') + (pkg ? ' from “' + pkg.name + '”' : '') + '. Clear it before opening “' + fileName +
+    '”? If you keep it, a divider line marks where the new package starts.';
+  return new Promise(resolve => {
+    dlg.addEventListener('close', () => resolve(dlg.returnValue === 'clear'), { once: true });
+    dlg.returnValue = '';
+    dlg.showModal();
+    $('clearLogYes').focus();
+  });
+}
 async function upload(file) {
   if (!/\.zip$/i.test(file.name)) { showBanner('Please choose a .zip SCORM package.', true); return; }
   if (location.protocol === 'file:') { showBanner(NO_SERVER, true); return; }
+  const clearLog = await askClearLog(file.name);
   showBanner('Unpacking ' + file.name + '…', false);
   const doUpload = async () => {
     try {
@@ -1727,6 +1756,9 @@ async function upload(file) {
       if (!res.ok) throw new Error('Could not load ' + file.name + ': ' + out.error);
       showBanner('', false);
       sco = null; rec = null; saved = null;
+      // Cleared only now, so the previous course's closing calls go too and nothing from the new one is lost
+      if (clearLog) $('log').innerHTML = '';
+      else if ($('log').childElementCount) note('──────── New package: ' + file.name + ' ────────');
       await openCurrentPackage();
     } catch (e) {
       showBanner(e.message, true);
@@ -1755,7 +1787,6 @@ document.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0]; if (f) upload(f);
 });
 
-// ── Collapsible sections in the right panel (remembered in this browser) ──
 // Hide the whole right panel; the header button or the tab on the right edge brings it back. Remembered in this browser.
 const PANEL_KEY = 'scormlms:panelHidden';
 function setPanelHidden(hidden, focusAfter) {
@@ -1772,6 +1803,7 @@ $('btnPanel').addEventListener('click', () => setPanelHidden(!$('lmsPanel').hidd
 $('panelTab').addEventListener('click', () => setPanelHidden(false, true));
 try { if (localStorage.getItem(PANEL_KEY) === '1') setPanelHidden(true); } catch {}
 
+// ── Collapsible sections in the right panel (remembered in this browser) ──
 const COLLAPSE_KEY = 'scormlms:collapsed';
 let collapsedSecs = [];
 try { collapsedSecs = JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || []; } catch {}

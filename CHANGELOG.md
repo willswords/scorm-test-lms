@@ -4,6 +4,25 @@
 
 If the test LMS was running when you updated its files, restart it (Ctrl+C, then run it again). **Quiz answers** and **Completion criteria** need the updated server; the other changes only need a page reload.
 
+- **Progress data size (`suspend_data`).** SCORM 1.2 LMSs only have to accept 4,096 characters (SCORM 2004: 4,000, or 64,000 in the 4th edition), and Storyline quizzes can go over late in the quiz without anyone noticing.
+  - **Early warning:** an issue at 80% of the limit, with the size shown amber in the learner record.
+  - **Over the limit:** an error issue explaining that progress will be lost on relaunch, and the size in red with the largest size tried.
+  - **New "suspend_data over the limit" setting** (Package section, **LMS behaviour**):
+    - **Reject it** (the default): error 405 in 1.2, 351 in 2004. SCORM 2004 values over the limit used to be stored with only a warning.
+    - **Cut it off silently**, as some LMSs do.
+    - **Store it all**, as lenient LMSs do.
+- **SCORM 1.2 vs 2004 status checks.** Strict LMSs don't paper over these, so they're now flagged:
+  - a SCORM 2004 element (such as `cmi.completion_status`) used in a 1.2 package, or a 1.2 one (`cmi.core.lesson_status`) in a 2004 package
+  - a 1.2 value in 2004, such as `completion_status = "passed"`, with an explanation of where pass/fail goes instead
+  - a 2004 course reporting `success_status = "passed"` but leaving `completion_status` incomplete
+  - a score with `completion_status = "completed"` but no `success_status`
+- **Close like a browser tab.** A new button (Package section, **LMS behaviour**) closes the course the way a learner closing the browser does: the calls it makes while closing are lost and shown crossed out in the log, so the LMS keeps only what was committed before. It flags values lost because they weren't committed yet, and an exit that wasn't set to "suspend" before the close, which means no resume next time. Then press **Relaunch**. Mid-quiz is where resume usually falls apart.
+- **Resume check.** A course relaunched to resume that never reads back its `suspend_data` is flagged, because it probably started from the beginning.
+- **Tested** with small SCORM 1.2 and 2004 test courses, covering:
+  - all three over-limit settings in both versions
+  - each status and element-name check
+  - a browser-tab close mid-course: the four closing calls were lost, the committed progress was kept, and the uncommitted location was lost
+  - a resume where the course ignored its saved data
 - **Completion criteria.** The Package section now shows what decides whether the course counts as complete, in two layers.
   - **Set in the course:** the authoring tool's tracking settings.
     - **Articulate Storyline** (from `html5/data/js/data.js`): the quiz pass mark and/or the number of slides to view, for example "Pass the quiz “QUIZTest” with 80% or more" or "View all 17 slides (including 5 drawn from a question bank)". When a course has several options, it's complete when any one is met, and the first one met is reported. It also shows how Storyline reports to the LMS, such as Passed when met and Incomplete until then, with the SCORM fields it sets.
@@ -41,6 +60,12 @@ If the test LMS was running when you updated its files, restart it (Ctrl+C, then
   - **Clear log** (the default button) also removes the previous course's closing calls, and nothing from the new package is lost.
   - **Keep it**, or Esc, keeps everything and adds a divider line ("New package: …") where the new package starts.
   - **No question when the log is empty:** for example, when opening the first package.
+- **Storyline testing has its own section.** It moved out of the Package section into its own section below it, which collapses like the others. It only appears for Storyline packages.
+- **Resizable right panel.** Drag the panel's left edge to make it wider or narrower. It works smoothly over the course, without clicking anything in it or reloading it.
+  - **Limits:** at least 300 pixels wide, and the course always keeps at least 360 pixels, including when the window is made smaller.
+  - **Resetting:** double-click the edge to go back to 430 pixels.
+  - **Keyboard:** Tab to the edge, then use ← / → (Shift for bigger steps), or Home to reset.
+  - **Remembered:** the width is saved in your browser.
 - **Hide the whole right panel.** A new **Hide panel** button in the header gives the course the full width, without relaunching or reloading it.
   - **To bring it back:** click the **Show LMS panel** tab on the right edge, or the header button.
   - **Issues stay visible:** the tab shows the number of issues so far, in red if any are errors.

@@ -44,7 +44,15 @@ label.inline{display:flex;align-items:center;gap:6px;color:var(--muted);white-sp
 .banner{padding:8px 14px;background:var(--warn-bg);color:var(--warn);border-bottom:1px solid var(--border)}
 .banner.err{background:var(--err-bg);color:var(--err)}
 
-main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;min-height:0}
+main{--panel-w:430px;flex:1;display:grid;grid-template-columns:minmax(0,1fr) var(--panel-w);min-height:0;position:relative}
+/* Drag handle on the panel's left edge */
+#panelResizer{position:absolute;top:0;bottom:0;right:var(--panel-w);width:10px;margin-right:-5px;z-index:5;cursor:col-resize;touch-action:none}
+#panelResizer::after{content:'';position:absolute;top:0;bottom:0;left:4px;width:2px;background:transparent;transition:background .15s}
+#panelResizer:hover::after,#panelResizer:focus-visible::after,main.resizing #panelResizer::after{background:var(--accent)}
+#panelResizer:focus-visible{outline:none}
+main.resizing{cursor:col-resize;user-select:none}
+main.resizing iframe{pointer-events:none}
+main.panel-hidden #panelResizer{display:none}
 /* Panel hidden: the course takes the width, and a slim tab on the right brings the panel back */
 main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .panel-tab{display:flex;align-items:center;justify-content:center;gap:10px;writing-mode:vertical-rl;width:34px;padding:12px 0;
@@ -88,6 +96,8 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .sl-head{margin-top:10px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .sl-head .v-muted{text-transform:none;letter-spacing:0;font-weight:400}
 .chk.sl{margin-top:6px;color:var(--text);font-weight:600}
+.sl-intro{font-size:12px;color:var(--muted)}
+.panel:has(#logSec:not(.collapsed)) #slSec{max-height:30%}
 .sl-note{font:11px/1.5 var(--mono);color:var(--muted);margin:2px 0 0 22px;word-break:break-all}
 .v-ok{color:var(--ok)}
 .v-muted{color:var(--muted)}
@@ -99,6 +109,9 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 #issues .none{background:none;color:var(--muted);padding:0}
 .count{font-family:var(--mono);background:var(--surface2);border-radius:9px;padding:0 7px;color:var(--text);letter-spacing:0}
 
+.lms-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;font-weight:600}
+.lms-row select{font-size:12px;padding:2px 6px;font-weight:400}
+.lms-row button{font-size:12px;padding:3px 10px}
 #critBody{font-size:12px;margin-top:4px;display:flex;flex-direction:column;gap:6px}
 #critBody .who{color:var(--muted)}
 #critBody .who code{font-size:11px}
@@ -127,6 +140,10 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
 .row .ret{color:var(--muted)}
 .row.err .c{color:var(--err)}
 .row.note .c{color:var(--accent);font-family:var(--sans)}
+.row.lost .c{color:var(--muted);text-decoration:line-through}
+.row.lost .c .ret{text-decoration:none;display:inline-block}
+.v-warn{color:var(--warn)}
+.v-err{color:var(--err)}
 .row.milestone{background:color-mix(in srgb,var(--ok) 16%,transparent)}
 .row.milestone .c{color:var(--ok);font-family:var(--sans);font-weight:600}
 .row.milestone.fail{background:color-mix(in srgb,var(--err) 16%,transparent)}
@@ -170,6 +187,7 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
   .panel{overflow:visible}
   #log{max-height:50vh}
   main.panel-hidden{grid-template-columns:1fr}
+  #panelResizer{display:none}
   .panel-tab{writing-mode:horizontal-tb;width:auto;height:40px;border-left:0;border-top:1px solid var(--border)}
 }
 </style>
@@ -227,6 +245,8 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
   <button id="panelTab" class="panel-tab" aria-controls="lmsPanel" aria-expanded="false" title="Show the LMS panel" hidden>
     <span aria-hidden="true">⇤</span> Show LMS panel <span class="count" id="panelTabIssues" hidden></span>
   </button>
+  <div id="panelResizer" role="separator" aria-orientation="vertical" aria-controls="lmsPanel" aria-label="Resize the LMS panel"
+    tabindex="0" title="Drag to resize the panel (double-click to reset)"></div>
   <aside class="panel" id="lmsPanel">
     <section id="pkgSec">
       <h2><button class="sec-toggle" data-sec="pkgSec" aria-expanded="true" aria-controls="pkgSec"><span class="chev" aria-hidden="true"></span>Package</button></h2>
@@ -235,17 +255,31 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
         <div class="sl-head">Completion criteria</div>
         <div id="critBody"></div>
       </div>
-      <div id="slBox" hidden>
-        <div class="sl-head">Storyline testing <span class="v-muted">(files are swapped as they&rsquo;re served; the package isn&rsquo;t changed)</span></div>
-        <label class="chk sl"><input type="checkbox" id="slFree"/> Free navigation (menu)</label>
-        <div class="sl-note" id="slNote"></div>
-        <label class="chk sl"><input type="checkbox" id="slSeek"/> Unlock seekbar</label>
-        <div class="sl-note" id="slSeekNote"></div>
-        <label class="chk sl"><input type="checkbox" id="slNav"/> Unlock Next/Prev buttons</label>
-        <div class="sl-note" id="slNavNote"></div>
-        <label class="chk sl"><input type="checkbox" id="slAnswers"/> Pre-select correct quiz answers</label>
-        <div class="sl-note" id="slAnswersNote"></div>
+      <div id="lmsBox" hidden>
+        <div class="sl-head">LMS behaviour <span class="v-muted">(to test how the course copes)</span></div>
+        <label class="lms-row" for="overSel">suspend_data over the limit
+          <select id="overSel">
+            <option value="reject">Reject it (error)</option>
+            <option value="truncate">Cut it off silently</option>
+            <option value="keep">Store it all (lenient)</option>
+          </select>
+        </label>
+        <div class="sl-note" id="overNote"></div>
+        <div class="lms-row"><button id="btnTabClose" disabled>Close like a browser tab</button></div>
+        <div class="sl-note">Calls the course makes while closing are lost, as when a learner closes the browser mid-course, so the LMS keeps only what was committed before. Then press Relaunch to see what the learner gets back.</div>
       </div>
+    </section>
+    <section id="slSec" hidden>
+      <h2><button class="sec-toggle" data-sec="slSec" aria-expanded="true" aria-controls="slSec"><span class="chev" aria-hidden="true"></span>Storyline testing</button></h2>
+      <div class="sl-intro">Files are swapped as they&rsquo;re served, so the package isn&rsquo;t changed. Each change relaunches the course.</div>
+      <label class="chk sl"><input type="checkbox" id="slFree"/> Free navigation (menu)</label>
+      <div class="sl-note" id="slNote"></div>
+      <label class="chk sl"><input type="checkbox" id="slSeek"/> Unlock seekbar</label>
+      <div class="sl-note" id="slSeekNote"></div>
+      <label class="chk sl"><input type="checkbox" id="slNav"/> Unlock Next/Prev buttons</label>
+      <div class="sl-note" id="slNavNote"></div>
+      <label class="chk sl"><input type="checkbox" id="slAnswers"/> Pre-select correct quiz answers</label>
+      <div class="sl-note" id="slAnswersNote"></div>
     </section>
     <section id="quizSec" hidden>
       <h2><button class="sec-toggle" data-sec="quizSec" aria-expanded="true" aria-controls="quizSec"><span class="chev" aria-hidden="true"></span>Quiz answers</button> <span class="count" id="quizCount">0</span></h2>
@@ -468,7 +502,7 @@ function setValue(el, v) {
       r['score_' + el.split('.').pop()] = v; return 0;
     case 'cmi.core.exit': if (!EXIT_VALUES.includes(v)) return 405; session.exit = v; return 0;
     case 'cmi.core.session_time': if (!TIMESPAN.test(v)) return 405; session.sessionTime = v; return 0;
-    case 'cmi.suspend_data': if (v.length > 4096) return 405; r.suspend_data = v; return 0;
+    case 'cmi.suspend_data': return setSuspend(r, el, v);
     case 'cmi.comments': if (v.length > 4096) return 405; r.comments = v; return 0;
     case 'cmi.student_preference.audio': if (!isInt(v, -1, 100)) return 405; r.preference.audio = v; return 0;
     case 'cmi.student_preference.language': if (v.length > 255) return 405; r.preference.language = v; return 0;
@@ -499,6 +533,14 @@ function setValue(el, v) {
 }
 
 function apiCall(fn, args, body) {
+  // "Close like a browser tab": what the course sends while closing never reaches the LMS (reads still work)
+  if (session && session.lostClose && !/GetValue$|GetLastError$|GetErrorString$|GetDiagnostic$/.test(fn)) {
+    session.lostCalls++;
+    logRow('lost', '<span class="fn">' + fn + '</span>(' + args.map(x => '"' + esc(short(x)) + '"').join(', ') + ') <span class="ret">→ lost: the window closed before it reached the LMS</span>',
+      false, { type: 'Lost call', call: fn, arg1: args[0], arg2: args[1], notes: 'Sent while the course was closed like a browser tab; never reached the LMS' });
+    return 'true';
+  }
+  if (/GetValue$|SetValue$/.test(fn)) elementChecks(fn, String(args[0] == null ? '' : args[0]));
   let ret, code = 0;
   try { [ret, code] = body(); }
   catch (e) { ret = 'false'; code = 101; issue('error', fn + ' threw inside the test LMS: ' + e.message); }
@@ -612,6 +654,51 @@ const ERRORS04 = {
 };
 let edition = 4; // SCORM 2004 edition (2, 3 or 4); the 4th edition allows 64,000 characters of suspend_data
 const suspendLimit = () => (edition >= 4 ? 64000 : 4000);
+
+// ── suspend_data size: the most an LMS must accept is 4,096 characters in SCORM 1.2 (4,000, or 64,000 in the
+// 2004 4th edition). Storyline quizzes grow it with every question, so courses can go over late and silently.
+// What this LMS does with an over-limit value: 'reject' (error), 'truncate' (cut off, no error) or 'keep' (store it all).
+let overLimitMode = 'reject';
+try { overLimitMode = localStorage.getItem('scormlms:overLimit') || 'reject'; } catch {}
+const suspendLimitNow = () => scormVer === '2004' ? suspendLimit() : 4096;
+const fmtNum = n => Number(n).toLocaleString('en-US');
+function setSuspend(r, el, v) {
+  const limit = suspendLimitNow(), ver = scormVer === '2004' ? 'SCORM 2004' : 'SCORM 1.2';
+  if (session) session.suspendPeak = Math.max(session.suspendPeak || 0, v.length);
+  if (v.length >= limit * 0.8 && v.length <= limit)
+    issue('warn', el + ' reached 80% of the ' + fmtNum(limit) + ' characters every ' + ver + ' LMS must accept. It grows as the learner progresses (a Storyline quiz adds to it with every question), so it may go over later in the course.');
+  if (v.length <= limit) { r.suspend_data = v; return 0; }
+  const over = el + ' went over the ' + fmtNum(limit) + ' characters every ' + ver + ' LMS must accept (the log shows each size). ';
+  if (overLimitMode === 'keep') {
+    r.suspend_data = v;
+    issue('warn', over + 'This LMS stored it all, as lenient ones do, but strict LMSs reject it or cut it off and the course then can’t resume properly. Change “suspend_data over the limit” in the Package section to test that.');
+    return 0;
+  }
+  if (overLimitMode === 'truncate') {
+    r.suspend_data = v.slice(0, limit);
+    issue('error', over + 'This LMS cut it off at the limit without an error, as some do, so on relaunch the course gets damaged progress data. Relaunch to see whether it copes.');
+    return 0;
+  }
+  issue('error', over + 'This LMS rejected it, so everything since the last save that fit is lost on relaunch. Courses rarely check for this error, so the learner isn’t told.');
+  return scormVer === '2004' ? 351 : 405;
+}
+
+// ── SCORM 1.2 and 2004 name and record status differently: 1.2 has one cmi.core.lesson_status; 2004 splits it into
+// cmi.completion_status and cmi.success_status. Lenient LMSs paper over a course mixing them up; strict ones don't.
+const ONLY_2004 = /^cmi\.(completion_status|success_status|location|exit|entry|credit|mode|session_time|total_time|progress_measure|score\.scaled|learner_id|learner_name)$/;
+function elementChecks(fn, el) {
+  if (scormVer === '1.2' && ONLY_2004.test(el))
+    issue('error', el + ' is a SCORM 2004 element, but this is a SCORM 1.2 package. SCORM 1.2 records completion and pass/fail together in cmi.core.lesson_status, and keeps location, exit and time under cmi.core. A real SCORM 1.2 LMS rejects it.');
+  else if (scormVer === '2004' && /^cmi\.core\./.test(el))
+    issue('error', el + ' is a SCORM 1.2 element, but this is a SCORM 2004 package. SCORM 2004 splits cmi.core.lesson_status into cmi.completion_status and cmi.success_status. A real SCORM 2004 LMS rejects it.');
+  if (/GetValue$/.test(fn) && el === 'cmi.suspend_data' && session) session.readSuspend = true;
+}
+function statusValueHint(el, v) {
+  if (el === 'cmi.completion_status' && /^(passed|failed|browsed)$/.test(v))
+    issue('error', 'cmi.completion_status was set to "' + v + '", a SCORM 1.2 lesson_status value. In SCORM 2004, set cmi.completion_status to "completed" (or "incomplete") and put pass/fail in cmi.success_status.');
+  if (el === 'cmi.success_status' && /^(completed|incomplete|browsed|not attempted)$/.test(v))
+    issue('error', 'cmi.success_status was set to "' + v + '", which is a completion value. In SCORM 2004, cmi.success_status is "passed", "failed" or "unknown"; completion goes in cmi.completion_status.');
+}
 const COMPLETION = ['completed', 'incomplete', 'not attempted', 'unknown'];
 const SUCCESS = ['passed', 'failed', 'unknown'];
 const EXIT04 = ['time-out', 'suspend', 'logout', 'normal', ''];
@@ -748,14 +835,14 @@ function setValue04(el, v) {
   if (el === 'cmi._version' || /\._(children|count)$/.test(el)) return 404;
   if (RO04.has(el) || /^cmi\.comments_from_lms\./.test(el) || /^adl\.nav\.request_valid\./.test(el)) return 404;
   switch (el) {
-    case 'cmi.completion_status': if (!COMPLETION.includes(v)) return 406; r.completion_status = v; return 0;
-    case 'cmi.success_status': if (!SUCCESS.includes(v)) return 406; r.success_status = v; return 0;
+    case 'cmi.completion_status': if (!COMPLETION.includes(v)) { statusValueHint(el, v); return 406; } r.completion_status = v; return 0;
+    case 'cmi.success_status': if (!SUCCESS.includes(v)) { statusValueHint(el, v); return 406; } r.success_status = v; return 0;
     case 'cmi.exit':
       if (!EXIT04.includes(v)) return 406;
       if (v === 'logout') issue('warn', 'cmi.exit was set to "logout", which SCORM 2004 deprecates. Use "normal" or "suspend".');
       session.exit = v; return 0;
     case 'cmi.location': overLimit(el, v, 1000); r.location = v; return 0;
-    case 'cmi.suspend_data': overLimit(el, v, suspendLimit()); r.suspend_data = v; return 0;
+    case 'cmi.suspend_data': return setSuspend(r, el, v);
     case 'cmi.progress_measure': if ((c = realIn(v, 0, 1))) return c; r.progress_measure = v; return 0;
     case 'cmi.score.scaled': if ((c = realIn(v, -1, 1))) return c; r.score.scaled = v; return 0;
     case 'cmi.score.raw': case 'cmi.score.min': case 'cmi.score.max':
@@ -889,6 +976,11 @@ function finishSession04() {
   }
   if (rec.completion_status === 'not attempted' || rec.completion_status === 'unknown')
     issue('warn', 'The course never reported cmi.completion_status, so the LMS can’t tell whether it was completed.');
+  // The 1.2-to-2004 split: lenient LMSs treat "passed" as done; strict ones go by completion_status alone
+  else if (rec.success_status === 'passed' && rec.completion_status !== 'completed')
+    issue('warn', 'The course reported cmi.success_status "passed" but left cmi.completion_status "' + rec.completion_status + '". Many LMSs count a pass as finished, but strict ones go by completion_status and keep the course incomplete. A SCORM 2004 course should set both.');
+  if (rec.completion_status === 'completed' && rec.success_status === 'unknown' && (rec.score.scaled !== '' || rec.score.raw !== '') && !sco.scaledPassingScore)
+    issue('warn', 'The course reported a score and cmi.completion_status "completed" but never set cmi.success_status, so pass/fail stays "unknown". LMSs that report pass/fail show neither.');
 
   const nav = s.navRequest || '_none_';
   const suspended = s.exit === 'suspend' || nav === 'suspendAll';
@@ -946,7 +1038,8 @@ function launch() {
     persist();
     statusBase = recordedStatus();   // a status the learner already had isn't a change in this launch
     rec = clone(saved);
-    session = { initialized: false, finished: false, exit: '', sessionTime: '', navRequest: '', uncommitted: 0, commits: 0, entry: rec.entry };
+    session = { initialized: false, finished: false, exit: '', sessionTime: '', navRequest: '', uncommitted: 0, commits: 0, entry: rec.entry,
+      resumeWithData: rec.entry === 'resume' && rec.suspend_data !== '', readSuspend: false, suspendPeak: 0 };
     launchT0 = Date.now();
     note('Launch #' + saved.launches + (scormVer === '2004' ? ', attempt ' + saved.attempt + (newAttempt ? ' (new)' : '') : '') +
       ': ' + sco.href + '  (entry "' + (rec.entry || '(blank)') + '")');
@@ -958,9 +1051,13 @@ function launch() {
   });
 }
 
-// Unload the course (fires its unload handlers), then audit what it did
-function endSession(then) {
+// Unload the course (fires its unload handlers), then audit what it did.
+// how = 'tab': close it like a browser tab, so the calls it makes while closing never reach the LMS.
+function endSession(then, how) {
   if (!session) { if (then) then(); return; }
+  if (how === 'tab' && !session.xapi && session.initialized && !session.finished) {
+    session.lostClose = true; session.lostCalls = 0; session.exitAtClose = session.exit;
+  }
   frame.addEventListener('load', function onBlank() {
     frame.removeEventListener('load', onBlank);
     const s = session;
@@ -983,10 +1080,23 @@ function endSession(then) {
     else if (!s.initialized) issue('error', scormVer === '2004'
       ? 'The course never called Initialize. It probably did not find the SCORM 2004 API (window.API_1484_11). It may be a SCORM 1.2 course packaged with a 2004 manifest.'
       : 'The course never called LMSInitialize. It probably did not find the SCORM 1.2 API (window.API). It may be a SCORM 2004 course packaged with a 1.2 manifest.');
+    else if (s.lostClose) {
+      // Nothing sent while closing arrived, so the LMS has the last commit and never got the finish call.
+      // The next launch resumes only if the course had already set exit to "suspend" before the window closed.
+      note('Closed like a browser tab: ' + s.lostCalls + ' call(s) made while closing never reached the LMS. It keeps what was last committed' +
+        (s.uncommitted ? ', so ' + s.uncommitted + ' value(s) set since then are lost' : '') + '.');
+      if (s.uncommitted) issue('warn', 'Values the course set but hadn’t committed were lost when it was closed like a browser tab. Courses should commit as they go (for example after each slide or answer), not only when they close, because browsers often block what a closing page sends.');
+      saved.entry = s.exitAtClose === 'suspend' ? 'resume' : '';
+      if (!saved.entry && saved.suspend_data) issue('warn', 'When the window closed, the course hadn’t yet set ' + (scormVer === '2004' ? 'cmi.exit' : 'cmi.core.exit') + ' to "suspend", so the next launch isn’t treated as a resume. Courses should set it early, in case the learner just closes the browser.');
+      persist();
+    }
     else if (!s.finished) {
       issue('warn', 'The course was closed without calling ' + fnName('finish') + '.');
       if (s.uncommitted) issue('error', s.uncommitted + ' value(s) were set but never committed before the course closed. A real LMS may lose them.');
     }
+    // A resume only works if the course reads back what it saved
+    if (s.initialized && s.resumeWithData && !s.readSuspend && !tooQuick)
+      issue('warn', 'The course was relaunched to resume, with saved progress in cmi.suspend_data, but it never read cmi.suspend_data, so it probably started from the beginning.');
     note('Session ended.');
     session = null;
     $('btnEnd').disabled = true;
@@ -1127,8 +1237,37 @@ async function openCurrentPackage() {
   sco = manifest.scos[0]; statusBase = null;
   issues.clear(); renderIssues();
   ['btnLaunch', 'btnReset', 'statusSel', 'btnClose'].forEach(id => $(id).disabled = false);
+  showLmsBox(true);
   refreshStoryline();
   launch();
+}
+
+// ── LMS behaviour (SCORM only): what to do with over-limit suspend_data, and closing like a browser tab ──
+function showLmsBox(on) {
+  $('lmsBox').hidden = !on;
+  if (!on) return;
+  $('overSel').value = overLimitMode;
+  $('overNote').textContent = (scormVer === '2004'
+    ? 'SCORM 2004 ' + ({ 2: '2nd', 3: '3rd', 4: '4th' })[edition] + ' edition: every LMS must accept ' + fmtNum(suspendLimit()) + ' characters.'
+    : 'SCORM 1.2: every LMS must accept 4,096 characters.') + ' Strict LMSs reject or cut off anything longer; lenient ones store it.';
+}
+$('overSel').addEventListener('change', e => {
+  overLimitMode = e.target.value;
+  try { localStorage.setItem('scormlms:overLimit', overLimitMode); } catch {}
+  note('suspend_data over the limit: ' + e.target.selectedOptions[0].textContent.toLowerCase() + '.');
+});
+$('btnTabClose').addEventListener('click', () => {
+  if (!session || session.xapi || !session.initialized || session.finished) return;
+  endSession(() => note('Press Relaunch to see what the learner gets back.'), 'tab');
+});
+// suspend_data in the learner record: amber from 80% of the limit, red once the course has tried to go over it
+function suspendSummary(r) {
+  const limit = suspendLimitNow(), len = r.suspend_data.length;
+  const peak = session && session.suspendPeak > limit ? session.suspendPeak : 0;
+  if (!len && !peak) return '<span class="v-muted">(blank)</span>';
+  const cls = peak || len > limit ? 'v-err' : len >= limit * 0.8 ? 'v-warn' : '';
+  const sum = '<span class="' + cls + '">' + fmtNum(len) + ' / ' + fmtNum(limit) + ' chars' + (peak ? ' · tried ' + fmtNum(peak) : '') + '</span>';
+  return len ? '<details><summary>' + sum + '</summary><pre>' + esc(r.suspend_data) + '</pre></details>' : sum;
 }
 
 // ── Completion criteria: what decides completion, from the course's authoring tool and from the manifest ──
@@ -1191,7 +1330,7 @@ async function renderCriteria() {
 async function refreshStoryline() {
   let info = null;
   try { info = await (await fetch('/api/storyline')).json(); } catch {}
-  const box = $('slBox');
+  const box = $('slSec');
   renderQuiz(info);
   if (!info || !info.storyline) { box.hidden = true; return; }
   box.hidden = false;
@@ -1318,8 +1457,9 @@ function resetToEmpty() {
   const sel = $('scoSel'); sel.innerHTML = ''; sel.hidden = true;
   $('verLabel').textContent = 'SCORM 1.2 · 2004 · xAPI';
   $('pkgInfo').innerHTML = '<span class="v-muted">No package loaded.</span>';
-  $('slBox').hidden = true;
+  $('slSec').hidden = true;
   $('critBox').hidden = true;
+  showLmsBox(false);
   $('quizSec').hidden = true;
   watchPrefilledText(false);
   $('btnLaunch').textContent = 'Launch';
@@ -1379,6 +1519,7 @@ async function openXapiPackage(base) {
   $('strict').disabled = true; $('strictLbl').style.opacity = '.5';
   $('strictLbl').title = 'SCORM only.';
   renderXapiPanel();
+  showLmsBox(false);
   refreshStoryline();
   launch();
 }
@@ -1557,6 +1698,7 @@ let renderQueued = false;
 function scheduleRender() { if (!renderQueued) { renderQueued = true; requestAnimationFrame(render); } }
 function render() {
   renderQueued = false;
+  $('btnTabClose').disabled = !(session && !session.xapi && session.initialized && !session.finished);
   const tbl = $('recTbl');
   if (sco) checkStatus(); else statusBase = null;
   if (!sco) { tbl.innerHTML = '<tr><td class="v-muted">No package loaded.</td></tr>'; return; }
@@ -1571,8 +1713,7 @@ function render() {
   add('lesson_status', esc(r.lesson_status), ['passed', 'completed'].includes(r.lesson_status) ? 'v-ok' : '');
   add('score', r.score_raw === '' ? '<span class="v-muted">(none)</span>' : esc(r.score_raw) + ' <span class="v-muted">(min ' + (esc(r.score_min) || '–') + ', max ' + (esc(r.score_max) || '–') + ')</span>');
   add('lesson_location', blank(r.lesson_location));
-  add('suspend_data', r.suspend_data === '' ? '<span class="v-muted">(blank)</span>' :
-    '<details><summary>' + r.suspend_data.length + ' / 4096 chars</summary><pre>' + esc(r.suspend_data) + '</pre></details>');
+  add('suspend_data', suspendSummary(r));
   add('total_time', esc(r.total_time));
   if (r.objectives.length) add('objectives', String(r.objectives.length));
   if (r.interactions.length) add('interactions', String(r.interactions.length));
@@ -1604,8 +1745,7 @@ function render04(r, add, group, blank) {
       ' <span class="v-muted">(min ' + (esc(sc.min) || '–') + ', max ' + (esc(sc.max) || '–') + ')</span>' : ''));
   if (r.progress_measure !== '') add('progress_measure', esc(r.progress_measure));
   add('location', blank(r.location));
-  add('suspend_data', r.suspend_data === '' ? '<span class="v-muted">(blank)</span>' :
-    '<details><summary>' + r.suspend_data.length + ' / ' + suspendLimit() + ' chars</summary><pre>' + esc(r.suspend_data) + '</pre></details>');
+  add('suspend_data', suspendSummary(r));
   add('total_time', esc(csToIso(r.total_cs)));
   if (r.objectives.length) add('objectives', String(r.objectives.length));
   if (r.interactions.length) add('interactions', String(r.interactions.length));
@@ -1802,6 +1942,49 @@ function setPanelHidden(hidden, focusAfter) {
 $('btnPanel').addEventListener('click', () => setPanelHidden(!$('lmsPanel').hidden));
 $('panelTab').addEventListener('click', () => setPanelHidden(false, true));
 try { if (localStorage.getItem(PANEL_KEY) === '1') setPanelHidden(true); } catch {}
+
+// ── Resize the right panel by dragging its left edge (or with the arrow keys); double-click resets it ──
+const PANEL_W_KEY = 'scormlms:panelWidth', PANEL_W_DEFAULT = 430, PANEL_W_MIN = 300;
+const mainEl = document.querySelector('main'), resizer = $('panelResizer');
+const maxPanelW = () => Math.max(PANEL_W_MIN, mainEl.clientWidth - 360);   // leave the course at least 360 px
+let panelW = PANEL_W_DEFAULT;
+function setPanelWidth(w, save) {
+  panelW = Math.round(Math.min(maxPanelW(), Math.max(PANEL_W_MIN, w)));
+  mainEl.style.setProperty('--panel-w', panelW + 'px');
+  resizer.setAttribute('aria-valuemin', PANEL_W_MIN);
+  resizer.setAttribute('aria-valuemax', maxPanelW());
+  resizer.setAttribute('aria-valuenow', panelW);
+  if (save) try { localStorage.setItem(PANEL_W_KEY, String(panelW)); } catch {}
+}
+resizer.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const startX = e.clientX, startW = panelW;
+  resizer.setPointerCapture(e.pointerId);
+  mainEl.classList.add('resizing');   // also stops the course frame swallowing the pointer
+  const move = ev => setPanelWidth(startW + (startX - ev.clientX));
+  const up = () => {
+    resizer.removeEventListener('pointermove', move);
+    resizer.removeEventListener('pointerup', up);
+    resizer.removeEventListener('pointercancel', up);
+    mainEl.classList.remove('resizing');
+    setPanelWidth(panelW, true);
+  };
+  resizer.addEventListener('pointermove', move);
+  resizer.addEventListener('pointerup', up);
+  resizer.addEventListener('pointercancel', up);
+});
+resizer.addEventListener('dblclick', () => setPanelWidth(PANEL_W_DEFAULT, true));
+resizer.addEventListener('keydown', e => {
+  const step = e.shiftKey ? 100 : 20;
+  if (e.key === 'ArrowLeft') setPanelWidth(panelW + step, true);        // the edge moves left: wider
+  else if (e.key === 'ArrowRight') setPanelWidth(panelW - step, true);
+  else if (e.key === 'Home') setPanelWidth(PANEL_W_DEFAULT, true);
+  else return;
+  e.preventDefault();
+});
+window.addEventListener('resize', () => setPanelWidth(panelW, false));
+try { const w = parseInt(localStorage.getItem(PANEL_W_KEY), 10); setPanelWidth(w > 0 ? w : PANEL_W_DEFAULT, false); } catch { setPanelWidth(PANEL_W_DEFAULT, false); }
 
 // ── Collapsible sections in the right panel (remembered in this browser) ──
 const COLLAPSE_KEY = 'scormlms:collapsed';

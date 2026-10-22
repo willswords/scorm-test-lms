@@ -246,9 +246,242 @@ function storylineInfo() {
       nav.seekLocks += countMatches(SEEK_LOCK_RE, t);
     }
   } catch {}
-  return { storyline: true, files, paths: FLOW_FILES, override: flowOverride, seekbar, nav, seekbarUnlocked, navUnlocked };
+  return { storyline: true, files, paths: FLOW_FILES, override: flowOverride, seekbar, nav, seekbarUnlocked, navUnlocked,
+    quiz: quizKey(), answersPreselected };
 }
-function storylineOverrideActive() { return !!(flowOverride || seekbarUnlocked || navUnlocked); }
+function storylineOverrideActive() { return !!(flowOverride || seekbarUnlocked || navUnlocked || answersPreselected); }
+
+// ── Storyline quiz answers: the answer key Storyline writes into html5/data/js/data.js ──
+// Each question ("interaction") lists its choices, which answer is "correct", and which slide object
+// (a radio button or checkbox) records each choice. With answersPreselected on, question slides are
+// served with the correct choices already checked, so the learner only has to press Submit.
+let answersPreselected = false;
+const DATA_JS = SLIDE_JS_DIR + '/data.js';
+const PRESELECTABLE = ['multiplechoice', 'multipleresponse', 'truefalse'];
+// The data files are window.globalProvideData('<kind>', '<JSON in a single-quoted JS string>').
+// They come from the package, so they're parsed as data and never run.
+const PROVIDE_RE = /globalProvideData\(\s*'(\w+)'\s*,\s*'([\s\S]*)'\s*\)\s*;?\s*$/;
+function unescapeJsString(s) {
+  return s.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (m, e) => {
+    if (e.length > 1 && e[0] === 'u') return String.fromCodePoint(parseInt(e[1] === '{' ? e.slice(2, -1) : e.slice(1), 16));
+    if (e.length === 3 && e[0] === 'x') return String.fromCharCode(parseInt(e.slice(1), 16));
+    const map = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', 0: '\0', '\n': '', '\r': '', '\r\n': '', ' ': '', ' ': '' };
+    return e in map ? map[e] : e;
+  });
+}
+function readProvided(text) {
+  const m = PROVIDE_RE.exec(text.replace(/^﻿/, ''));
+  if (!m) return null;
+  try { return { kind: m[1], data: JSON.parse(unescapeJsString(m[2])) }; } catch { return null; }
+}
+const writeProvided = (kind, data) => `window.globalProvideData('${kind}', ${JSON.stringify(JSON.stringify(data))});`;
+
+function quizKey() {
+  if (!current) return null;
+  if (current.quizKey === undefined) {
+    current.quizKey = null;
+    try {
+      const d = readProvided(fs.readFileSync(path.join(current.root, DATA_JS), 'utf8'));
+      if (d && d.kind === 'data') current.quizKey = buildQuizKey(d.data);
+    } catch {}
+  }
+  return current.quizKey;
+}
+// Numeric questions: a condition such as {"kind":"or","statements":[{"kind":"compare","operator":"eq",…,"valueb":4}]}
+const OPERATOR_WORDS = { eq: '=', noteq: '≠', lt: '<', lte: '≤', gt: '>', gte: '≥' };
+function describeCondition(st) {
+  if (!st) return '';
+  if (st.kind === 'or' || st.kind === 'and') {
+    const parts = st.statements || [];
+    const ops = Object.fromEntries(parts.filter(p => p.kind === 'compare').map(p => [p.operator, p.valueb]));
+    if (st.kind === 'and' && parts.length === 2 && 'gte' in ops && 'lte' in ops) return 'between ' + ops.gte + ' and ' + ops.lte;
+    return parts.map(describeCondition).filter(Boolean).join(st.kind === 'or' ? ' or ' : ' and ');
+  }
+  if (st.kind === 'compare') return st.operator === 'eq' ? String(st.valueb) : (OPERATOR_WORDS[st.operator] || st.operator) + ' ' + st.valueb;
+  return '';
+}
+// A number that meets the condition, to type into the box
+function numberFor(st) {
+  if (!st) return null;
+  if (st.kind === 'or') { for (const p of st.statements || []) { const n = numberFor(p); if (n != null) return n; } return null; }
+  if (st.kind === 'and') {
+    let lo = -Infinity, hi = Infinity, eq = null;
+    for (const p of st.statements || []) {
+      if (p.kind !== 'compare' || typeof p.valueb !== 'number') return null;
+      if (p.operator === 'eq') eq = p.valueb;
+      else if (p.operator === 'gte') lo = Math.max(lo, p.valueb); else if (p.operator === 'gt') lo = Math.max(lo, p.valueb + 1);
+      else if (p.operator === 'lte') hi = Math.min(hi, p.valueb); else if (p.operator === 'lt') hi = Math.min(hi, p.valueb - 1);
+    }
+    return eq != null ? eq : lo !== -Infinity ? (lo <= hi ? lo : null) : hi !== Infinity ? hi : null;
+  }
+  if (st.kind === 'compare' && typeof st.valueb === 'number')
+    return { eq: st.valueb, gte: st.valueb, lte: st.valueb, gt: st.valueb + 1, lt: st.valueb - 1, noteq: st.valueb + 1 }[st.operator] ?? null;
+  return null;
+}
+function findObject(root, id) {
+  let hit = null;
+  (function walk(o) { if (hit || !o || typeof o !== 'object') return; if (o.id === id) { hit = o; return; } for (const k in o) walk(o[k]); })(root);
+  return hit;
+}
+
+function buildQuizKey(data) {
+  const quizOf = new Map();   // slide id → its quiz
+  for (const q of data.quizzes || []) for (const r of q.sliderefs || []) quizOf.set(String(r.id).split('.').pop(), q);
+  const slideCache = new Map();
+  const loadSlide = file => {
+    if (!slideCache.has(file)) { let d = null; try { const p = readProvided(fs.readFileSync(path.join(current.root, file), 'utf8')); d = p && p.data; } catch {} slideCache.set(file, d); }
+    return slideCache.get(file);
+  };
+  const questions = [];
+  // Question slides are in the scenes, or in question banks (slideBank) that a quiz draws from
+  const slides = [];
+  for (const scene of data.scenes || []) for (const slide of scene.slides || []) slides.push({ slide, bank: false });
+  for (const slide of (data.slideBank && data.slideBank.slides) || []) slides.push({ slide, bank: true });
+  const onlyQuiz = (data.quizzes || []).length === 1 ? data.quizzes[0] : null;
+  for (const { slide, bank } of slides) for (const it of slide.interactions || []) {
+    const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    const choices = new Map((it.choices || []).map(c => ['choices.' + c.id, clean(c.lmstext)]));
+    const targets = new Map((it.statements || []).map(s => ['statements.' + s.id, clean(s.lmstext)]));   // matching: where each item goes
+    const label = v => choices.has(v) ? choices.get(v) : targets.has(v) ? targets.get(v) : JSON.stringify(v);
+    // responseDefinition: "if <group>.<object>.#_checked is true, record choice X"
+    const objectFor = new Map();
+    for (const a of (it.responseDefinition && it.responseDefinition.actions) || []) {
+      const v = a && a.condition && a.condition.statement && a.condition.statement.valuea;
+      const add = (a && a.thenActions || []).find(t => t && t.kind === 'addchoiceresponse');
+      if (typeof v === 'string' && add && /\.#_checked$/.test(v)) { const parts = v.split('.'); objectFor.set(add.value, parts[parts.length - 2]); }
+    }
+    const describe = st => st.kind === 'equals' && st.choiceid ? label(st.choiceid)
+      : st.choiceid && st.statementid ? label(st.choiceid) + ' → ' + label(st.statementid)
+      : st.kind + ' ' + Object.entries(st).filter(([k]) => k !== 'kind' && k !== 'ignorecase').map(([k, v]) => k + ' ' + label(v)).join(', ');
+    const correct = (it.answers || []).filter(a => a && a.status === 'correct');
+    const sts0 = (correct[0] && correct[0].evaluate && correct[0].evaluate.statements) || [];
+    const actions = (it.responseDefinition && it.responseDefinition.actions) || [];
+    // The text box a fill-in or numeric answer is typed into, and the course variable it's bound to
+    const boundVariable = () => {
+      const add = actions.find(a => a && a.kind === 'addchoiceresponse' && /^\w+\.\$Text$/.test(a.value));
+      const input = add && findObject(loadSlide(slide.html5url), add.value.split('.')[0]);
+      const m = input && input.kind === 'textinput' && /^_player\.(\w+)$/.exec(input.bindto || '');
+      return m ? m[1] : null;
+    };
+    let answers = correct.map(a => ({ points: a.points, parts: ((a.evaluate && a.evaluate.statements) || []).map(describe) }));
+    let prefill = null, apply = null, note = '';
+    if (PRESELECTABLE.includes(it.type)) {
+      // Check the correct choices: on-slide radio buttons or checkboxes
+      if (sts0.length && sts0.every(st => st.kind === 'equals' && objectFor.has(st.choiceid))) {
+        apply = { checked: sts0.map(st => objectFor.get(st.choiceid)) };
+        prefill = { how: 'select' };
+      }
+    } else if (it.type === 'fillin') {
+      // Any one of the accepted answers will do
+      const accepted = sts0.filter(st => st.kind === 'equals' && st.choiceid).map(st => label(st.choiceid));
+      answers = accepted.map(t => ({ points: correct[0].points, parts: [t] }));
+      if (sts0.some(st => st.ignorecase)) note = 'not case-sensitive';
+      const v = boundVariable();
+      if (accepted.length && v) { apply = { projectVars: { [v]: accepted[0] } }; prefill = { how: 'type', value: accepted[0] }; }
+    } else if (it.type === 'numeric') {
+      const cond = sts0.length === 1 && sts0[0].kind === 'condition' ? sts0[0].statement : null;
+      const n = numberFor(cond), v = boundVariable();
+      if (cond) answers = [{ points: correct[0].points, parts: [describeCondition(cond)] }];
+      if (n != null && v) { apply = { projectVars: { [v]: String(n) } }; prefill = { how: 'type', value: String(n) }; }
+    } else if (it.type === 'sequence') {
+      // Each item's position, in order
+      answers = answers.map((a, i) => ({ points: a.points, parts: (correct[i].evaluate.statements || [])
+        .map(st => ({ pos: label(st.statementid), item: label(st.choiceid) })).sort((x, y) => parseFloat(x.pos) - parseFloat(y.pos))
+        .map(p => p.pos + '. ' + p.item) }));
+    } else if (it.type === 'hotspot') {
+      answers = answers.map(a => ({ points: a.points, parts: a.parts.map(p => 'Click inside “' + p + '”') }));
+      // "if the click (#…_xpos, #…_ypos) is inside <shape>, record the correct choice": record a click at the shape's centre
+      const hit = sts0.length === 1 && actions.find(a => a && a.condition && a.condition.statement && a.condition.statement.kind === 'hittestpoint' &&
+        (a.thenActions || []).some(t => t && t.kind === 'addchoiceresponse' && t.value === sts0[0].choiceid));
+      const ht = hit && hit.condition.statement;
+      const layer = loadSlide(slide.html5url) && loadSlide(slide.html5url).slideLayers && loadSlide(slide.html5url).slideLayers[0];
+      const shape = ht && layer && (layer.objects || []).find(o => o && o.id === ht.objRef.value);   // directly on the slide, so its position is in slide coordinates
+      const xv = ht && /^#(\w+_xpos)$/.exec(ht.xPos && ht.xPos.value || ''), yv = ht && /^#(\w+_ypos)$/.exec(ht.yPos && ht.yPos.value || '');
+      if (shape && xv && yv && !shape.rotation) {
+        const cx = Math.round(shape.xPos + shape.width / 2), cy = Math.round(shape.yPos + shape.height / 2);
+        const marker = (layer.objects || []).find(o => o && o.id === xv[1].replace(/_xpos$/, '_marker'));
+        apply = { slideVars: { [xv[1]]: cx, [yv[1]]: cy } };
+        if (marker) {
+          apply.move = { [marker.id]: { xPos: cx - Math.round(marker.width / 2), yPos: cy - Math.round(marker.height / 2) } };
+          apply.show = [marker.id];   // normally shown only once the learner clicks
+        }
+        prefill = { how: 'click' };
+      }
+    }
+    const quiz = quizOf.get(slide.id) || (bank ? onlyQuiz : null);
+    // Questions are often labelled just "Multiple Choice"; then use the question's wording from the slide
+    let title = clean(it.lmstext);
+    if (!title || GENERIC_TITLE.test(title)) title = questionText(slide.html5url) || title || clean(slide.title);
+    questions.push({
+      slideId: slide.id, file: slide.html5url || '', title, type: it.type || '', survey: !!it.issurvey, bank,
+      quiz: quiz ? quiz.lmstext || quiz.id : '', choices: [...choices.values()], correct: answers, note, prefill, apply
+    });
+  }
+  // A course variable shared by text boxes with different answers can't hold them all, so those aren't pre-filled
+  const varValues = new Map();
+  for (const q of questions) for (const [k, v] of Object.entries((q.apply && q.apply.projectVars) || {})) varValues.set(k, (varValues.get(k) || new Set()).add(v));
+  for (const q of questions) if (q.apply && q.apply.projectVars && Object.keys(q.apply.projectVars).some(k => varValues.get(k).size > 1)) { q.apply = null; q.prefill = null; }
+  if (!questions.length) return null;
+  return { quizzes: (data.quizzes || []).map(q => ({ name: q.lmstext || q.id, passPercent: q.passPercent, survey: !!q.issurvey })), questions };
+}
+const GENERIC_TITLE = /^(multiple choice|multiple response|true ?\/? ?false|drag and drop|matching( drag and drop| drop-?down)?|fill[- ]in[- ]the[- ]blanks?|word bank|sequence( drag and drop| drop-?down)?|numeric|hotspot|likert( scale)?|pick (one|many)|ranking( drag and drop| drop-?down)?|how many|essay|short answer|free ?form.*|question( ?\d+)?)$/i;
+// The longest text box on the slide's base layer, leaving out answer choices and buttons
+function questionText(file) {
+  try {
+    const p = readProvided(fs.readFileSync(path.join(current.root, file), 'utf8'));
+    const layer = p && p.data.slideLayers && p.data.slideLayers[0];
+    let best = '';
+    (function walk(o) {
+      if (!o || typeof o !== 'object') return;
+      if (o.accType && o.accType !== 'text') return;
+      for (const t of Array.isArray(o.textLib) ? o.textLib : []) {
+        const s = ((t && t.vartext && t.vartext.blocks) || []).map(b => (b.spans || []).map(sp => sp.text).join('')).join(' ').replace(/\s+/g, ' ').trim();
+        if (s.length > best.length) best = s;
+      }
+      for (const k in o) if (k !== 'textLib') walk(o[k]);
+    })(layer && layer.objects);
+    return best;
+  } catch { return ''; }
+}
+// Serve a file with the correct answers filled in:
+//   checked     - choice objects whose "checked" variable starts true (multiple choice/response, true/false)
+//   slideVars   - slide variables to start with a value (a hotspot's recorded click position)
+//   move        - objects to start at another position (the hotspot's click marker)
+//   show        - objects to show from the start of the slide (the marker)
+//   projectVars - course variables in data.js to start with a value (what's typed into fill-in and numeric boxes)
+function applyAnswers(text, applies) {
+  const p = readProvided(text);
+  if (!p) return text;
+  const checked = new Set(applies.flatMap(a => a.checked || []));
+  const show = new Set(p.kind === 'slide' ? applies.flatMap(a => a.show || []) : []);
+  const slideVars = Object.assign({}, ...applies.map(a => a.slideVars || {}));
+  const move = Object.assign({}, ...applies.map(a => a.move || {}));
+  const projectVars = p.kind === 'data' ? Object.assign({}, ...applies.map(a => a.projectVars || {})) : {};
+  let n = 0;
+  const setVar = (v, value) => { v.value = v.type === 'number' ? Number(value) : v.type === 'boolean' ? !!value : String(value); n++; };
+  for (const v of (p.kind === 'slide' && Array.isArray(p.data.variables)) ? p.data.variables : []) if (v && v.name in slideVars) setVar(v, slideVars[v.name]);
+  for (const v of Array.isArray(p.data.variables) ? p.data.variables : []) if (v && v.name in projectVars) setVar(v, projectVars[v.name]);
+  (function walk(o) {
+    if (!o || typeof o !== 'object') return;
+    if (typeof o.id === 'string') {
+      if (checked.has(o.id) && Array.isArray(o.variables)) for (const v of o.variables) if (v && v.name === '_checked') { v.value = true; n++; }
+      if (move[o.id]) { Object.assign(o, move[o.id]); n++; }
+    }
+    for (const k in o) walk(o[k]);
+  })(p.kind === 'slide' ? p.data : null);
+  // Show: add a "show" action at the start of the timeline of the layer the object is on
+  for (const layer of show.size && Array.isArray(p.data.slideLayers) ? p.data.slideLayers : []) {
+    const ids = (layer.objects || []).map(o => o && o.id).filter(id => show.has(id));
+    if (!ids.length) continue;
+    layer.timeline = layer.timeline || { duration: 0, events: [] };
+    layer.timeline.events = layer.timeline.events || [];
+    let start = layer.timeline.events.find(e => e && e.kind === 'ontimelinetick' && e.time === 0);
+    if (!start) layer.timeline.events.unshift(start = { kind: 'ontimelinetick', time: 0, actions: [] });
+    start.actions = start.actions || [];
+    for (const id of ids) { start.actions.push({ kind: 'show', transition: 'appear', objRef: { type: 'string', value: id } }); n++; }
+  }
+  return n ? writeProvided(p.kind, p.data) : text;
+}
 function transformStoryline(rel, text) {
   if (rel === FLOW_FILES.xml) return flowOverride ? text.replace(FLOW_RE.xml, '$1' + flowOverride + '$3') : text;
   if (rel === FLOW_FILES.js) {
@@ -259,6 +492,11 @@ function transformStoryline(rel, text) {
   if (isSlideJs(rel)) {
     if (navUnlocked) text = text.replace(NAV_LOCK_RE, '$1true');
     if (seekbarUnlocked) text = text.replace(SEEK_LOCK_RE, '$1true');
+    if (answersPreselected) {
+      const key = quizKey();
+      const applies = key ? key.questions.filter(q => q.apply && (rel === DATA_JS ? q.apply.projectVars : q.file === rel)).map(q => q.apply) : [];
+      if (applies.length) text = applyAnswers(text, applies);
+    }
   }
   return text;
 }
@@ -269,7 +507,7 @@ function serveStoryline(res, file, rel) {
     sendText(res, 200, MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', transformStoryline(rel, text));
   });
 }
-function resetStorylineOverrides() { flowOverride = null; seekbarUnlocked = false; navUnlocked = false; }
+function resetStorylineOverrides() { flowOverride = null; seekbarUnlocked = false; navUnlocked = false; answersPreselected = false; }
 
 function closePackage() {
   const old = current;
@@ -685,12 +923,13 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') {
         const q = url.searchParams;
         const bad = (k, ok) => q.has(k) && !ok.includes(q.get(k));
-        if (bad('flow', ['free', 'restricted', 'original']) || bad('seekbar', ['unlocked', 'packaged']) || bad('nav', ['unlocked', 'packaged']))
-          return sendJson(res, 400, { error: 'Use flow=free|restricted|original, seekbar=unlocked|packaged, nav=unlocked|packaged' });
+        if (bad('flow', ['free', 'restricted', 'original']) || bad('seekbar', ['unlocked', 'packaged']) || bad('nav', ['unlocked', 'packaged']) || bad('answers', ['preselect', 'packaged']))
+          return sendJson(res, 400, { error: 'Use flow=free|restricted|original, seekbar=unlocked|packaged, nav=unlocked|packaged, answers=preselect|packaged' });
         if (q.has('flow')) flowOverride = q.get('flow') === 'original' ? null : q.get('flow');
         if (q.has('seekbar')) seekbarUnlocked = q.get('seekbar') === 'unlocked';
         if (q.has('nav')) navUnlocked = q.get('nav') === 'unlocked';
-        if (current) console.log(`Storyline overrides for ${current.name}: navigation ${flowOverride || 'as packaged'}, seekbar ${seekbarUnlocked ? 'unlocked' : 'as packaged'}, Next/Prev ${navUnlocked ? 'unlocked' : 'as packaged'}`);
+        if (q.has('answers')) answersPreselected = q.get('answers') === 'preselect';
+        if (current) console.log(`Storyline overrides for ${current.name}: navigation ${flowOverride || 'as packaged'}, seekbar ${seekbarUnlocked ? 'unlocked' : 'as packaged'}, Next/Prev ${navUnlocked ? 'unlocked' : 'as packaged'}, quiz answers ${answersPreselected ? 'pre-selected' : 'as packaged'}`);
       }
       return sendJson(res, 200, storylineInfo());
     }

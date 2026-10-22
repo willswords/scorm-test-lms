@@ -9,6 +9,8 @@ It supports:
 
 The header and the **Package** panel show which kind of package is loaded.
 
+What changed in each update is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Requirements
 
 [Node.js](https://nodejs.org) 18 or later. Nothing else needs installing.
@@ -43,7 +45,25 @@ Only this computer can reach the test LMS. Unzipped packages go in a temporary f
 
 - **Course:** the course runs on the left, inside the test LMS, just as it would in a real LMS.
 - **Package:** at the top of the right panel, a badge shows the SCORM version in use (for example "SCORM 2004 · 4th edition"). Below it are the version the manifest declares, the LMS connection the course is given, and the number of course items.
+- **Quiz answers:** for Storyline packages with quiz questions, a section listing every question and its correct answer, read from the answer key Storyline writes into `html5/data/js/data.js`.
+  - **What it shows:** the question type, its points, and the quiz name and pass mark.
+  - **Answers by question type:**
+    - Multiple response: every box to tick.
+    - Fill in the blank: each accepted spelling, noting when case doesn't matter.
+    - Numeric: the number or range.
+    - Matching: each item and its match.
+    - Sequence: the items in order.
+    - Hotspot: the area to click.
+  - **Question banks:** questions drawn from a bank are marked "bank", because the quiz may use only some of them, in any order.
+  - **Question wording:** when a question is only labelled something like "Multiple Choice", its wording is taken from the slide.
 - **Learner record:** what the LMS has stored for this learner (status, score, location, saved progress, total time). It also shows the current session: whether the course has started and finished its LMS session, its exit value, the session time, and how many changes are waiting to be saved. For SCORM 2004 it also shows the attempt number and the previous attempt's result.
+- **Completion alerts:** when the LMS records the course as complete or passed, the whole page pulses green and a message at the top shows what was recorded and when. A red pulse marks a fail.
+  - **When it fires:** when the change is saved (on commit, or when the course finishes), because a value the course sets but never commits wouldn't reach a real LMS.
+  - **Worked out by the LMS:** for SCORM 2004 packages with a completion threshold or passing score, the message says how the status was worked out, for example "progress_measure 0.9 vs completion_threshold 0.8".
+  - **xAPI:** it fires when the LRS receives a `completed`, `passed` or `failed` statement.
+  - **No repeats:** it only fires on a change in the current launch. A learner who was already complete doesn't trigger it on relaunch, and neither does a status you set from **Learner status**.
+  - **Stays recorded:** the message disappears after 15 seconds (or click ×), but a highlighted line stays in the log and in the CSV.
+  - **Reduced motion:** if your system is set to reduce motion, the page fades once instead of pulsing.
 - **Issues:** problems a real LMS could trip over. Examples:
   - invalid values
   - writing read-only fields
@@ -83,6 +103,8 @@ Click a section's heading, or Tab to it and press Enter, to collapse or expand i
 | &nbsp;&nbsp;**Free navigation (menu)** | Switches the menu `flow` in `frame.xml` and `frame.js` between `"restricted"` and `"free"`, so the learner can jump to any slide from the menu. |
 | &nbsp;&nbsp;**Unlock seekbar** | Makes the seekbar draggable. It sets `"readonly"` and `"readonlyOnce"` in `frame.js`'s `controls` to `false`, and stops any slide trigger from disabling the seekbar. Greyed out if the package doesn't lock the seekbar. |
 | &nbsp;&nbsp;**Unlock Next/Prev buttons** | Keeps Next and Prev (and the matching swipe gestures) enabled. Slide triggers that disable them (`enable_window_control … "enable":false`) are served as `true`. The note shows how many such triggers the package has. If a slide's Next button has no destination (the slide moves on through its own buttons instead), enabling it still won't move on. Hidden buttons stay hidden. |
+| &nbsp;&nbsp;**Pre-select correct quiz answers** | Questions open with the correct answer already filled in, so you only press Submit. This makes it quick to test passing, results and completion reporting. Only the answer values change as the files are served:<br/>• **Multiple choice, multiple response and true/false:** the correct choices are ticked.<br/>• **Fill in the blank and numeric:** the box contains an accepted answer, such as the first accepted spelling or a number that meets the condition. The test LMS also sends a key press to the box, because Storyline only reads a box's text once something has been typed in it.<br/>• **Hotspot:** a click in the middle of the correct area is recorded, and the marker is shown there.<br/>Matching, sequence (drag and drop or drop-down) and drag-and-drop questions can't be pre-filled. Answer them by hand using **Quiz answers**. If the learner is resuming, Storyline restores their own saved answers instead, so use **Reset learner** for a clean run. |
+| **Hide panel / Show panel** | Hides the whole right panel so the course gets the full width. It doesn't relaunch or reload the course. While hidden, a **Show LMS panel** tab runs down the right edge of the page, with the number of issues so far (red if any are errors). Click it, or the header button, to bring the panel back. Completion alerts still appear while the panel is hidden, and the choice is remembered in your browser. |
 | **Close package** | Closes the course (its exit code runs), unloads the package and deletes its unpacked files, and returns to the start screen. Learner records are kept, so reopening the package later remembers the learner. |
 
 Learner records are saved in your browser, separately for each course, so they survive restarting the tool.

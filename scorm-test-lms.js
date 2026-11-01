@@ -493,7 +493,7 @@ function completionCriteria() {
   try {
     const dataJs = read(DATA_JS);
     const d = dataJs && readProvided(dataJs);
-    if (d && d.kind === 'data') out = storylineCriteria(d.data);
+    if (d && d.kind === 'data') out = storylineCriteria(d.data, read);
     else {
       const cfg = read('config.xml');
       const tag = name => { const m = cfg && new RegExp('<' + name + '(?:\\s[^>]*)?>([^<]*)</' + name + '>').exec(cfg); return m ? m[1].trim() : null; };
@@ -509,7 +509,7 @@ function completionCriteria() {
   } catch {}
   return (current.criteria = out);
 }
-function storylineCriteria(data) {
+function storylineCriteria(data, read) {
   const quizName = id => { const q = (data.quizzes || []).find(x => x.id === id); return q ? q.lmstext || id : id; };
   // Slides that count as viewed: those tracking views, plus the questions each question-bank draw shows
   let counted = 0, drawn = 0;
@@ -527,7 +527,8 @@ function storylineCriteria(data) {
         ? 'Pass the quiz ' + names + ' with ' + s.passPercent + '% or more'
         : 'Finish the quiz ' + names + ' (pass mark 0%, so any score passes)' };
     }
-    if (s.type === 'trigger') return { kind: 'trigger', text: 'Reach a slide with a Complete Course trigger' };
+    // "Track using triggers": Storyline writes "action" (scoringId_Trigger)
+    if (s.type === 'action' || s.type === 'trigger') return { kind: 'trigger', text: 'Reach a slide with a Complete Course trigger' };
     if (s.type === 'view') {
       const from = drawn ? ', including ' + drawn + ' drawn from a question bank' : '';
       return { kind: 'view', viewThreshold: s.viewThreshold, counted,
@@ -538,11 +539,23 @@ function storylineCriteria(data) {
   });
   const status = v => ({ pass: 'Passed', complete: 'Completed', completed: 'Completed', fail: 'Failed', failed: 'Failed', incomplete: 'Incomplete' })[v] || v;
   const s0 = (data.scorings || [])[0];
+  // Complete Course triggers ({"kind":"set_course_status","status":true}) in the slide files and data.js. The player
+  // applies them only when tracking uses triggers; without that tracking option they do nothing.
+  const files = [];
+  for (const scene of data.scenes || []) for (const slide of scene.slides || []) if (slide.html5url) files.push(slide.html5url);
+  const COMPLETE_TRIGGER = /\\?"kind\\?"\s*:\s*\\?"set_course_status\\?"\s*,\s*\\?"status\\?"\s*:\s*true/;
+  const hasTrigger = readFile => readFile && [DATA_JS, ...files].some(f => COMPLETE_TRIGGER.test(readFile(f) || ''));
+  const usesTriggers = criteria.some(c => c.kind === 'trigger');
+  const triggers = hasTrigger(read);
+  const note = !criteria.length ? 'No tracking option is set in this Storyline file, so the course never reports completion (unless its own JavaScript does).'
+    : usesTriggers && triggers === false ? 'Tracking uses Complete Course triggers, but no slide has one, so the course never completes.'
+    : !usesTriggers && triggers ? 'The course has Complete Course triggers, but tracking doesn’t use triggers, so the player ignores them.'
+    : '';
   return {
     tool: 'Articulate Storyline', source: 'html5/data/js/data.js', criteria,
     any: criteria.length > 1,   // Storyline counts the course complete when any one is met
     reports: s0 ? { met: status(s0.passStatus), notMet: status(s0.failStatus) } : null,
-    note: criteria.length ? '' : 'No tracking option is set in this Storyline file, so completion comes from the course’s own triggers.'
+    note
   };
 }
 function videoPackagerCriteria(thresholdPercent, selfComplete, ack, source) {

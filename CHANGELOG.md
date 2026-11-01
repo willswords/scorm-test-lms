@@ -1,5 +1,15 @@
 # Change log
 
+## 2026-10-31
+
+Restart the test LMS after updating (the change is in the server).
+
+- **Completion criteria: Storyline "Track using triggers" is recognised.** Storyline writes this tracking option as `"type": "action"` in `data.js`, not `"trigger"`, so such courses showed "Storyline tracking type “action”". They now show "Reach a slide with a Complete Course trigger".
+- **Completion criteria: warnings about Complete Course triggers.** The block now says when:
+  - tracking uses triggers, but no slide has a Complete Course trigger, so the course never completes;
+  - the course has Complete Course triggers, but tracking doesn't use triggers, so the Storyline player ignores them;
+  - no tracking option is set, so the course never reports completion (unless its own JavaScript does). This replaces a note that said completion came from the course's triggers.
+
 ## 2026-10-22
 
 If the test LMS was running when you updated its files, restart it (Ctrl+C, then run it again). **Quiz answers** and **Completion criteria** need the updated server; the other changes only need a page reload.

@@ -9,6 +9,7 @@ Restart the test LMS after updating (the change is in the server).
   - tracking uses triggers, but no slide has a Complete Course trigger, so the course never completes;
   - the course has Complete Course triggers, but tracking doesn't use triggers, so the Storyline player ignores them;
   - no tracking option is set, so the course never reports completion (unless its own JavaScript does). This replaces a note that said completion came from the course's triggers.
+- **Completion criteria: when the video packager's "Mark as complete" button appears.** If a SCORM Video Packager package shows the button only after part of the video is watched (`<self-complete-after>` in `config.xml`), the criteria say so, for example "Or press the “Mark as complete” button, which appears after 30% of the video has been watched".
 
 ## 2026-10-22
 

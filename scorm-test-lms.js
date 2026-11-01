@@ -499,11 +499,11 @@ function completionCriteria() {
       const tag = name => { const m = cfg && new RegExp('<' + name + '(?:\\s[^>]*)?>([^<]*)</' + name + '>').exec(cfg); return m ? m[1].trim() : null; };
       if (cfg && /<player-config[\s>]/.test(cfg)) {
         const ack = /<acknowledgment[^>]*\benabled="true"/.test(cfg);
-        out = videoPackagerCriteria(parseFloat(tag('threshold')), tag('allow-self-complete') === 'true', ack, 'config.xml');
+        out = videoPackagerCriteria(parseFloat(tag('threshold')), tag('allow-self-complete') === 'true', ack, 'config.xml', parseFloat(tag('self-complete-after')));
       } else {
         const idx = read('index.html') || '';
-        const m = /const CFG=\{\s*threshold:([\d.]+),\s*allowSelfComplete:(true|false),\s*enableAck:(true|false)/.exec(idx);
-        if (m) out = videoPackagerCriteria(parseFloat(m[1]) * 100, m[2] === 'true', m[3] === 'true', 'index.html');
+        const m = /const CFG=\{\s*threshold:([\d.]+),\s*allowSelfComplete:(true|false),\s*enableAck:(true|false)(?:,\s*selfCompleteAfter:([\d.]+))?/.exec(idx);
+        if (m) out = videoPackagerCriteria(parseFloat(m[1]) * 100, m[2] === 'true', m[3] === 'true', 'index.html', parseFloat(m[4]) * 100);
       }
     }
   } catch {}
@@ -558,9 +558,13 @@ function storylineCriteria(data, read) {
     note
   };
 }
-function videoPackagerCriteria(thresholdPercent, selfComplete, ack, source) {
+// buttonAfterPercent: how much must be watched before the "Mark as complete" button appears (missing/0 = from the start)
+function videoPackagerCriteria(thresholdPercent, selfComplete, ack, source, buttonAfterPercent) {
   const criteria = [{ kind: 'watch', text: 'Watch at least ' + (isNaN(thresholdPercent) ? '100' : Math.round(thresholdPercent)) + '% of the video (skipped parts don’t count)' }];
-  if (selfComplete) criteria.push({ kind: 'button', text: 'Or press the “Mark as complete” button' });
+  const after = Math.round(buttonAfterPercent) || 0;
+  if (selfComplete) criteria.push({ kind: 'button', text: after > 0
+    ? 'Or press the “Mark as complete” button, which appears after ' + after + '% of the video has been watched'
+    : 'Or press the “Mark as complete” button' });
   return { tool: 'SCORM Video Packager', source, criteria, any: selfComplete,
     then: ack ? 'Then confirm the acknowledgement; completion is only reported after that.' : '',
     reports: { met: 'Passed', notMet: 'Incomplete', score: 100 } };

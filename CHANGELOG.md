@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-11-02
+
+Restart the test LMS after updating (the change is in the server).
+
+- **Storyline testing: Add Next/Prev buttons where turned off.** A new box below Unlock Next/Prev buttons. Unlock keeps buttons enabled that triggers disable; this one shows buttons a slide's Player features turn off (`frame.js` `controlLayouts` with `"previous"`/`"next"` false), question slides included, where they appear beside Submit. Those slides are published without a Next or Prev trigger, so they're served with Storyline's usual ones: Next goes to the next slide in the menu's order, Prev goes back. The note counts the slides, for example "10 slide(s) turn off Next/Prev in their Player features". The same option is in Storyline Review Tools 1.1.1.
+- **Storyline testing: two options can change the same file.** A file the test LMS has already rewritten (in double quotes) is now read again correctly, so, for example, pre-selected answers still fill in on a slide that also gets Next/Prev triggers.
+
 ## 2026-10-31
 
 Restart the test LMS after updating (the change is in the server).

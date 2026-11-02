@@ -197,6 +197,7 @@ function serveFile(req, res, file) {
 let flowOverride = null;      // null = as packaged, otherwise 'free' or 'restricted'
 let seekbarUnlocked = false;  // serve the seekbar as draggable
 let navUnlocked = false;      // keep Next/Prev enabled even when slide triggers disable them
+let navAdded = false;         // add Next/Prev on slides whose Player features turn them off
 const FLOW_FILES = { xml: 'story_content/frame.xml', js: 'html5/data/js/frame.js' };
 const SLIDE_JS_DIR = 'html5/data/js';
 // frame.js and the slide files hold JSON inside a JS string, so quotes may or may not be backslash-escaped
@@ -216,6 +217,67 @@ const SEEK_LOCK_RE = lockTrigger('seekbar');
 const isSlideJs = rel => rel.startsWith(SLIDE_JS_DIR + '/') && /^[^/]+\.js$/.test(rel.slice(SLIDE_JS_DIR.length + 1)) && rel !== FLOW_FILES.js;
 const countMatches = (re, text) => (text.match(re) || []).length;
 
+// ── Next/Prev turned off in a slide's Player features ──
+// Which player buttons a slide shows is one of frame.js's "controlLayouts", which the slide applies as it loads:
+//   "controlLayouts": { "npnxnanbnsnfns…": { "previous": false, "next": false, "swipeleft": false, "swiperight": false, … } }
+//   {"kind":"set_frame_layout","name":"npnxnanbnsnfns…"}
+// Such a slide is also published without the trigger the button runs, so with navAdded on it gets Storyline's usual
+// ones: Next goes to the following slide in the menu's order, Prev goes back (history_prev).
+const LAYOUT_NAV = { previous: 'swipeleft', next: 'swiperight' };   // each button, and the swipe that does the same
+const LAYOUT_RE = new RegExp(`${Q}kind${Q}\\s*:\\s*${Q}set_(?:frame|window_control)_layout${Q}\\s*,\\s*${Q}name${Q}\\s*:\\s*${Q}([^"\\\\]+)`, 'g');
+const layoutsOf = text => new Set([...text.matchAll(LAYOUT_RE)].map(m => m[1]));
+const controlLayoutsOf = frame => { const l = frame && (frame.controlLayouts || (frame.controlOptions && frame.controlOptions.controlLayouts)); return l && typeof l === 'object' ? l : {}; };
+// For the current package: the layouts that hide each button, and the slides in the menu's order (cached)
+function hiddenNavInfo() {
+  if (!current) return null;
+  if (current.hiddenNav !== undefined) return current.hiddenNav;
+  let out = null;
+  try {
+    const f = readProvided(fs.readFileSync(path.join(current.root, FLOW_FILES.js), 'utf8'));
+    const d = readProvided(fs.readFileSync(path.join(current.root, DATA_JS), 'utf8'));
+    if (f && d && d.kind === 'data') {
+      const layouts = controlLayoutsOf(f.data), order = [];
+      for (const scene of d.data.scenes || []) if (!scene.isMessageScene) for (const s of scene.slides || []) order.push(scene.id + '.' + s.id);
+      out = {
+        prev: new Set(Object.keys(layouts).filter(k => layouts[k] && layouts[k].previous === false)),
+        next: new Set(Object.keys(layouts).filter(k => layouts[k] && layouts[k].next === false)),
+        order
+      };
+    }
+  } catch {}
+  return (current.hiddenNav = out);
+}
+// Add the missing triggers to one slide; returns how many were added
+function addMissingNav(slide, info) {
+  if (!slide || typeof slide !== 'object' || !info) return 0;
+  const names = layoutsOf(JSON.stringify(slide));
+  const hides = set => [...names].some(n => set.has(n));
+  const events = Array.isArray(slide.events) ? slide.events : (slide.events = []);
+  const i = info.order.findIndex(p => p.endsWith('.' + slide.id));
+  const nextPath = i >= 0 && i < info.order.length - 1 ? '_player.' + info.order[i + 1] : null;
+  let n = 0;
+  if (hides(info.next) && nextPath && !events.some(e => e && e.kind === 'onnextslide')) {
+    events.push({ kind: 'onnextslide', actions: [{ kind: 'gotoplay', window: '_current', wndtype: 'normal', objRef: { type: 'string', value: nextPath } }] });
+    n++;
+  }
+  if (hides(info.prev) && !events.some(e => e && e.kind === 'onprevslide')) { events.push({ kind: 'onprevslide', actions: [{ kind: 'history_prev' }] }); n++; }
+  return n;
+}
+// frame.js with every layout showing Prev and Next; a slide file (or data.js, for slides embedded in it) with the triggers
+function addNavButtons(rel, text) {
+  const p = readProvided(text);
+  if (!p) return text;
+  let n = 0;
+  if (rel === FLOW_FILES.js) {
+    for (const l of Object.values(controlLayoutsOf(p.data))) {
+      if (!l || typeof l !== 'object') continue;
+      for (const [btn, swipe] of Object.entries(LAYOUT_NAV)) if (l[btn] === false) { l[btn] = true; if (l[swipe] === false) l[swipe] = true; n++; }
+    }
+  } else if (p.kind === 'slide') n = addMissingNav(p.data, hiddenNavInfo());
+  else if (p.kind === 'data') for (const scene of p.data.scenes || []) for (const s of scene.slides || []) if (!s.html5url && s.slideLayers) n += addMissingNav(s, hiddenNavInfo());
+  return n ? writeProvided(p.kind, p.data) : text;
+}
+
 function storylineInfo() {
   if (!current) return { storyline: false };
   const read = rel => { try { return fs.readFileSync(path.join(current.root, rel), 'utf8'); } catch { return null; } };
@@ -232,7 +294,9 @@ function storylineInfo() {
   if (!any) return { storyline: false };
   const seekbar = { readonly: null, readonlyOnce: null };
   if (frameJs) for (const k of ['readonly', 'readonlyOnce']) { const m = SEEK_RE[k].exec(frameJs); if (m) seekbar[k] = m[2] === 'true'; }
-  const nav = { slideFiles: 0, lockedFiles: 0, navLocks: 0, seekLocks: 0 };
+  const nav = { slideFiles: 0, lockedFiles: 0, navLocks: 0, seekLocks: 0, hiddenSlides: 0 };
+  const hidden = hiddenNavInfo();
+  const hiding = hidden ? new Set([...hidden.prev, ...hidden.next]) : new Set();
   try {
     for (const n of fs.readdirSync(path.join(current.root, SLIDE_JS_DIR))) {
       const rel = SLIDE_JS_DIR + '/' + n;
@@ -244,12 +308,13 @@ function storylineInfo() {
       if (locks) nav.lockedFiles++;
       nav.navLocks += locks;
       nav.seekLocks += countMatches(SEEK_LOCK_RE, t);
+      if (rel !== DATA_JS && [...layoutsOf(t)].some(l => hiding.has(l))) nav.hiddenSlides++;   // its Player features turn off Prev or Next
     }
   } catch {}
-  return { storyline: true, files, paths: FLOW_FILES, override: flowOverride, seekbar, nav, seekbarUnlocked, navUnlocked,
+  return { storyline: true, files, paths: FLOW_FILES, override: flowOverride, seekbar, nav, seekbarUnlocked, navUnlocked, navAdded,
     quiz: quizKey(), answersPreselected };
 }
-function storylineOverrideActive() { return !!(flowOverride || seekbarUnlocked || navUnlocked || answersPreselected); }
+function storylineOverrideActive() { return !!(flowOverride || seekbarUnlocked || navUnlocked || navAdded || answersPreselected); }
 
 // ── Storyline quiz answers: the answer key Storyline writes into html5/data/js/data.js ──
 // Each question ("interaction") lists its choices, which answer is "correct", and which slide object
@@ -260,7 +325,8 @@ const DATA_JS = SLIDE_JS_DIR + '/data.js';
 const PRESELECTABLE = ['multiplechoice', 'multipleresponse', 'truefalse'];
 // The data files are window.globalProvideData('<kind>', '<JSON in a single-quoted JS string>').
 // They come from the package, so they're parsed as data and never run.
-const PROVIDE_RE = /globalProvideData\(\s*'(\w+)'\s*,\s*'([\s\S]*)'\s*\)\s*;?\s*$/;
+// (Single-quoted as published; double-quoted once writeProvided has rewritten a file, so that one change can follow another.)
+const PROVIDE_RE = /globalProvideData\(\s*'(\w+)'\s*,\s*(['"])([\s\S]*)\2\s*\)\s*;?\s*$/;
 function unescapeJsString(s) {
   return s.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (m, e) => {
     if (e.length > 1 && e[0] === 'u') return String.fromCodePoint(parseInt(e[1] === '{' ? e.slice(2, -1) : e.slice(1), 16));
@@ -272,7 +338,7 @@ function unescapeJsString(s) {
 function readProvided(text) {
   const m = PROVIDE_RE.exec(text.replace(/^﻿/, ''));
   if (!m) return null;
-  try { return { kind: m[1], data: JSON.parse(unescapeJsString(m[2])) }; } catch { return null; }
+  try { return { kind: m[1], data: JSON.parse(unescapeJsString(m[3])) }; } catch { return null; }
 }
 const writeProvided = (kind, data) => `window.globalProvideData('${kind}', ${JSON.stringify(JSON.stringify(data))});`;
 
@@ -575,11 +641,13 @@ function transformStoryline(rel, text) {
   if (rel === FLOW_FILES.js) {
     if (flowOverride) text = text.replace(FLOW_RE.js, '$1' + flowOverride + '$3');
     if (seekbarUnlocked) text = text.replace(SEEK_RE.readonly, '$1false').replace(SEEK_RE.readonlyOnce, '$1false');
+    if (navAdded) text = addNavButtons(rel, text);
     return text;
   }
   if (isSlideJs(rel)) {
     if (navUnlocked) text = text.replace(NAV_LOCK_RE, '$1true');
     if (seekbarUnlocked) text = text.replace(SEEK_LOCK_RE, '$1true');
+    if (navAdded) text = addNavButtons(rel, text);
     if (answersPreselected) {
       const key = quizKey();
       const applies = key ? key.questions.filter(q => q.apply && (rel === DATA_JS ? q.apply.projectVars : q.file === rel)).map(q => q.apply) : [];
@@ -595,7 +663,7 @@ function serveStoryline(res, file, rel) {
     sendText(res, 200, MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', transformStoryline(rel, text));
   });
 }
-function resetStorylineOverrides() { flowOverride = null; seekbarUnlocked = false; navUnlocked = false; answersPreselected = false; }
+function resetStorylineOverrides() { flowOverride = null; seekbarUnlocked = false; navUnlocked = false; navAdded = false; answersPreselected = false; }
 
 function closePackage() {
   const old = current;
@@ -1012,13 +1080,14 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') {
         const q = url.searchParams;
         const bad = (k, ok) => q.has(k) && !ok.includes(q.get(k));
-        if (bad('flow', ['free', 'restricted', 'original']) || bad('seekbar', ['unlocked', 'packaged']) || bad('nav', ['unlocked', 'packaged']) || bad('answers', ['preselect', 'packaged']))
-          return sendJson(res, 400, { error: 'Use flow=free|restricted|original, seekbar=unlocked|packaged, nav=unlocked|packaged, answers=preselect|packaged' });
+        if (bad('flow', ['free', 'restricted', 'original']) || bad('seekbar', ['unlocked', 'packaged']) || bad('nav', ['unlocked', 'packaged']) || bad('navadd', ['added', 'packaged']) || bad('answers', ['preselect', 'packaged']))
+          return sendJson(res, 400, { error: 'Use flow=free|restricted|original, seekbar=unlocked|packaged, nav=unlocked|packaged, navadd=added|packaged, answers=preselect|packaged' });
         if (q.has('flow')) flowOverride = q.get('flow') === 'original' ? null : q.get('flow');
         if (q.has('seekbar')) seekbarUnlocked = q.get('seekbar') === 'unlocked';
         if (q.has('nav')) navUnlocked = q.get('nav') === 'unlocked';
+        if (q.has('navadd')) navAdded = q.get('navadd') === 'added';
         if (q.has('answers')) answersPreselected = q.get('answers') === 'preselect';
-        if (current) console.log(`Storyline overrides for ${current.name}: navigation ${flowOverride || 'as packaged'}, seekbar ${seekbarUnlocked ? 'unlocked' : 'as packaged'}, Next/Prev ${navUnlocked ? 'unlocked' : 'as packaged'}, quiz answers ${answersPreselected ? 'pre-selected' : 'as packaged'}`);
+        if (current) console.log(`Storyline overrides for ${current.name}: navigation ${flowOverride || 'as packaged'}, seekbar ${seekbarUnlocked ? 'unlocked' : 'as packaged'}, Next/Prev ${navUnlocked ? 'unlocked' : 'as packaged'}, turned-off Next/Prev ${navAdded ? 'added' : 'as packaged'}, quiz answers ${answersPreselected ? 'pre-selected' : 'as packaged'}`);
       }
       return sendJson(res, 200, storylineInfo());
     }

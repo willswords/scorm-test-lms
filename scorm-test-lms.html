@@ -321,6 +321,8 @@ main.panel-hidden{grid-template-columns:minmax(0,1fr) auto}
       <div class="sl-note" id="slSeekNote"></div>
       <label class="chk sl"><input type="checkbox" id="slNav"/> Unlock Next/Prev buttons</label>
       <div class="sl-note" id="slNavNote"></div>
+      <label class="chk sl"><input type="checkbox" id="slNavAdd"/> Add Next/Prev buttons where turned off</label>
+      <div class="sl-note" id="slNavAddNote"></div>
       <label class="chk sl"><input type="checkbox" id="slAnswers"/> Pre-select correct quiz answers</label>
       <div class="sl-note" id="slAnswersNote"></div>
     </section>
@@ -1404,6 +1406,15 @@ async function refreshStoryline() {
       (info.navUnlocked ? ' → kept enabled. Slides whose Next has no destination still won’t move on.' : '.')
     : 'No triggers that disable Next/Prev were found.';
 
+  // Next/Prev turned off in slides' Player features (frame.js controlLayouts): added, with Storyline's usual triggers
+  const hiddenSlides = nav.hiddenSlides || 0;
+  $('slNavAdd').checked = !!info.navAdded;
+  $('slNavAdd').disabled = !hiddenSlides && !info.navAdded;
+  $('slNavAddNote').textContent = hiddenSlides
+    ? hiddenSlides + ' slide(s) turn off Next/Prev in their Player features' +
+      (info.navAdded ? ' → added; Next goes to the next slide, Prev goes back.' : '.')
+    : 'No slides turn off Next/Prev.';
+
   // Quiz answers: question slides served with the correct answers already filled in
   watchPrefilledText(!!info.answersPreselected && !!info.quiz && info.quiz.questions.some(q => q.prefill && q.prefill.how === 'type'));
   const qs = info.quiz ? info.quiz.questions : [];
@@ -1483,6 +1494,8 @@ $('slSeek').addEventListener('change', e =>
   setStoryline('seekbar', e.target.checked ? 'unlocked' : 'packaged', e.target, e.target.checked ? 'Storyline seekbar unlocked' : 'Storyline seekbar back to the package’s setting'));
 $('slNav').addEventListener('change', e =>
   setStoryline('nav', e.target.checked ? 'unlocked' : 'packaged', e.target, e.target.checked ? 'Storyline Next/Prev unlocked' : 'Storyline Next/Prev back to the package’s triggers'));
+$('slNavAdd').addEventListener('change', e =>
+  setStoryline('navadd', e.target.checked ? 'added' : 'packaged', e.target, e.target.checked ? 'Storyline Next/Prev added where slides turn them off' : 'Storyline Next/Prev back to the slides’ Player features'));
 $('slAnswers').addEventListener('change', e =>
   setStoryline('answers', e.target.checked ? 'preselect' : 'packaged', e.target, e.target.checked ? 'Correct quiz answers pre-selected' : 'Quiz answers back to unselected'));
 

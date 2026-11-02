@@ -150,6 +150,7 @@ In the Package panel, **Storyline testing** appears when a package contains `sto
 | **Free navigation (menu)** | `"flow"` inside `menuOptions` in `frame.js`, and `<option name="flow" value="…">` in `frame.xml`, become `"free"`. Unticking serves `"restricted"`. Other `flow` keys in the file are left alone. |
 | **Unlock seekbar** | `"readonly"` and `"readonlyOnce"` inside `frame.js`'s `controls` become `false`, and any slide trigger that disables `seekbar` is served with `"enable": true`. |
 | **Unlock Next/Prev buttons** | In every file in `html5/data/js` except `frame.js`, triggers that disable `next`, `prev`, `previous`, `swiperight` or `swipeleft` are served with `"enable": true`. Triggers that enable controls, show or hide them, or run click actions are not touched. |
+| **Add Next/Prev buttons where turned off** | A slide's Player features choose one of the control layouts in `frame.js` (`"controlLayouts"`, applied by the slide's `{"kind":"set_frame_layout","name":"…"}`). In every layout, `"previous"` and `"next"` (and `"swipeleft"`/`"swiperight"`) are served as `true`. A slide that turned a button off has no trigger for it, so it's served with Storyline's usual ones: `{"kind":"onnextslide",…"gotoplay"…}` to the next slide in the menu's order, and `{"kind":"onprevslide","actions":[{"kind":"history_prev"}]}`. Slides that keep their buttons, or already have the trigger (such as question slides), aren't changed. |
 
 The panel notes show what the package does and what's being swapped. For example:
 
@@ -157,6 +158,7 @@ The panel notes show what the package does and what's being swapped. For example
 html5/data/js/frame.js: "restricted" → served as "free"
 Seekbar is read-only until a slide has been viewed once → served as draggable.
 44 trigger(s) in 11 slide(s) disable Next/Prev → kept enabled.
+10 slide(s) turn off Next/Prev in their Player features → added; Next goes to the next slide, Prev goes back.
 ```
 
 A box is greyed out when there's nothing for it to unlock.
